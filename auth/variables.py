@@ -6,6 +6,8 @@ from loguru import logger
 
 # Grab the environment variables
 env_vars = {
+    "APP_VERSION": os.environ.get("APP_VERSION") or "unknown",
+    "GIT_COMMIT": os.environ.get("GIT_COMMIT") or "unknown",
     "API_ENV": os.environ.get("API_ENV", None),
     "REDIS_HOST": os.environ.get("REDIS_HOST", '127.0.0.1'),
     "REDIS_PORT": int(os.environ.get("REDIS_PORT", 6379)),

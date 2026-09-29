@@ -32,8 +32,12 @@ threads = []
 @app.route('/check', methods=['GET'])
 def check_get():
     return jsonify({
+        "msg": 'up and running',
         "success": True,
-        "payload": {'status': 'ok'},
+        "payload": {
+            "version": env_vars['APP_VERSION'],
+            "commit": env_vars['GIT_COMMIT'],
+        },
     }), 200
 
 

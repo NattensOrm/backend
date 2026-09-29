@@ -123,6 +123,7 @@ def test_check_get():
     response = requests.get(f'{APP_URL}/check', timeout=(1, 1))
     assert response.status_code == 200
     assert response.json()['success'] is True
+    assert set(response.json()['payload']) == {'version', 'commit'}
 
 
 def test_creature_pop_spawns_a_thread(creature):

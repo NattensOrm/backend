@@ -95,13 +95,14 @@ def after_request_time(response):
 #
 @app.route('/check', methods=['GET'])
 def check():
-    return jsonify(
-        {
-            "msg": 'UP and running',
-            "success": True,
-            "payload": None,
-            }
-        ), 200
+    return jsonify({
+        "msg": 'up and running',
+        "success": True,
+        "payload": {
+            "version": env_vars['APP_VERSION'],
+            "commit": env_vars['GIT_COMMIT'],
+        },
+    }), 200
 
 
 #

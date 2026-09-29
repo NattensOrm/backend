@@ -19,6 +19,12 @@ RUN adduser -h /code -u 1000 -D -H auth
 # Set environment variables
 ENV PATH="/code/.local/bin:${PATH}"
 
+# Build metadata (exposed by /check)
+ARG APP_VERSION=unknown
+ARG GIT_COMMIT=unknown
+ENV APP_VERSION=${APP_VERSION} \
+    GIT_COMMIT=${GIT_COMMIT}
+
 # Copy the necessary files from the build stage
 COPY --chown=auth:auth --from=builder /code /code
 
