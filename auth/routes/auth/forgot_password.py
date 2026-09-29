@@ -11,7 +11,7 @@ from routes.auth import auth_bp
 from routes.auth.schemas import MessageResponse, ValidationErrorResponse
 from utils.mail import send
 from utils.token import generate_reset_token
-from variables import DATA_PATH, DISCORD_URL
+from variables import DATA_PATH, env_vars
 
 GENERIC_MSG = "If that account exists, a password reset code has been sent by email."
 
@@ -34,7 +34,7 @@ def _send_reset_password_email(mail):
     email_body = Template(email_body).substitute(
         urllogo='[INSERT LOGO HERE]',
         token=token,
-        urldiscord=DISCORD_URL,
+        urldiscord=env_vars['DISCORD_URL'],
         )
 
     return send(mail, subject, email_body)

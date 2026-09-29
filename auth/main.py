@@ -13,7 +13,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from variables import (
     env_vars,
-    SEP_SECRET_KEY,
     GUNICORN_BIND,
     GUNICORN_CHDIR,
     GUNICORN_RELOAD,
@@ -58,7 +57,7 @@ app.register_api(auth_bp)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Setup the Flask-JWT-Extended extension
-app.config['JWT_SECRET_KEY'] = SEP_SECRET_KEY
+app.config['JWT_SECRET_KEY'] = env_vars['SEP_SECRET_KEY']
 jwt = JWTManager(app)
 
 

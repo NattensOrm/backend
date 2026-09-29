@@ -3,7 +3,7 @@
 from flask_jwt_extended import decode_token
 
 from utils.redis import r
-from variables import env_vars, TOKEN_DURATION
+from variables import env_vars
 
 REFRESH_TOKEN_DURATION = 30 * 24 * 60 * 60  # 30 days, in seconds
 
@@ -18,7 +18,7 @@ def register_access_token(username, access_token):
     r.set(
         f"{env_vars['API_ENV']}:auth:access_jti:{access_jti}",
         username,
-        ex=TOKEN_DURATION * 60,
+        ex=env_vars['TOKEN_DURATION'] * 60,
         )
 
 
@@ -43,7 +43,7 @@ def revoke_access_token(jti):
     r.set(
         f"{env_vars['API_ENV']}:auth:access_jti:{jti}",
         "revoked",
-        ex=TOKEN_DURATION * 60,
+        ex=env_vars['TOKEN_DURATION'] * 60,
         )
 
 

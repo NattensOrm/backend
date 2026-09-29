@@ -4,7 +4,7 @@ from string import Template
 
 from utils.mail import send
 from utils.token import generate_confirmation_token
-from variables import API_URL, DATA_PATH, DISCORD_URL
+from variables import DATA_PATH, env_vars
 
 
 def send_confirmation_email(mail):
@@ -15,7 +15,7 @@ def send_confirmation_email(mail):
     from account/token creation. Shared by register.py and resend.py. """
     subject = '[🐒&🐖] Bienvenue chez le Singouins !'
     token = generate_confirmation_token(mail)
-    url = f'{API_URL}/confirm/{token}'
+    url = f"{env_vars['API_URL']}/confirm/{token}"
     with open(f"{DATA_PATH}/registered.html", "r") as f:
         email_body = f.read()
 
@@ -25,7 +25,7 @@ def send_confirmation_email(mail):
     email_body = Template(email_body).substitute(
         urllogo='[INSERT LOGO HERE]',
         urlconfirm=url,
-        urldiscord=DISCORD_URL,
+        urldiscord=env_vars['DISCORD_URL'],
         )
 
     return send(mail, subject, email_body)

@@ -15,18 +15,18 @@ env_vars = {
     "SMTP_USER": os.environ['SEP_SMTP_USER'],
     "SMTP_PASS": os.environ['SEP_SMTP_PASS'],
     "SMTP_HOSTNAME": os.environ['SEP_SMTP_HOSTNAME'],
+    "SEP_SECRET_KEY": os.environ['SEP_SECRET_KEY'],
+    "TOKEN_DURATION": int(os.environ.get("SEP_TOKEN_DURATION", 60)),
+    "API_URL": os.environ.get("API_URL", 'http://127.0.0.1:5000'),
+    # Discord permanent invite link
+    "DISCORD_URL": os.environ.get("SEP_DISCORD_URL", 'http://127.0.0.1'),
 }
 # Print the environment variables for debugging
+_SENSITIVE_VARS = {"SMTP_PASS", "SEP_SECRET_KEY"}
 for var, value in env_vars.items():
+    if var in _SENSITIVE_VARS and value is not None:
+        value = f'{value[:4]}...{value[-4:]}'
     logger.debug(f"{var}: {value}")
-
-# Auth variables
-SEP_SECRET_KEY = os.environ['SEP_SECRET_KEY']
-TOKEN_DURATION = int(os.environ.get("SEP_TOKEN_DURATION", 60))
-API_URL = os.environ.get("API_URL", 'http://127.0.0.1:5000')
-
-# Discord permanent invite link
-DISCORD_URL = os.environ.get("SEP_DISCORD_URL", 'http://127.0.0.1')
 
 # Gunicorn variables
 GUNICORN_CHDIR   = os.environ.get("GUNICORN_CHDIR", '/code')

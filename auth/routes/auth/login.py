@@ -12,7 +12,7 @@ from mongo.models.User import UserDocument
 from routes.auth import auth_bp
 from routes.auth.schemas import MessageResponse, TokenPairResponse, ValidationErrorResponse
 from utils.auth import register_access_token, register_refresh_token
-from variables import TOKEN_DURATION
+from variables import env_vars
 
 
 class LoginUserSchema(BaseModel):
@@ -50,7 +50,7 @@ def login(body: LoginUserSchema):
     # Create tokens
     access_token = create_access_token(
         identity=body.username,
-        expires_delta=datetime.timedelta(minutes=TOKEN_DURATION)
+        expires_delta=datetime.timedelta(minutes=env_vars['TOKEN_DURATION'])
     )
     refresh_token = create_refresh_token(identity=body.username)
 

@@ -14,7 +14,10 @@ env_vars = {
     "REDIS_BASE": int(os.environ.get("REDIS_BASE", 0)),
 }
 # Print the environment variables for debugging
+_SENSITIVE_VARS = set()
 for var, value in env_vars.items():
+    if var in _SENSITIVE_VARS and value is not None:
+        value = f'{value[:4]}...{value[-4:]}'
     logger.debug(f"{var}: {value}")
 
 # API variables
