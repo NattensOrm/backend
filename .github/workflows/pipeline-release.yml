@@ -15,6 +15,21 @@ jobs:
   mongo-pytest:
     runs-on: ubuntu-latest
 
+    services:
+      # Start MongoDB 🌱
+      mongo:
+        image: mongo:7.0.43
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: singouins
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS }}
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
@@ -38,14 +53,6 @@ jobs:
         # stop the build if there are Python syntax errors or undefined names
         echo "--- Linting with flake8"
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-    - name: Start MongoDB 🌱
-      uses: supercharge/mongodb-github-action@1.12.1
-      with:
-        mongodb-version: ${{ vars.MONGO_VERS }}
-        mongodb-username: ${{ vars.MONGO_USER }}
-        mongodb-password: ${{ secrets.MONGO_PASS }}
-        mongodb-db: ${{ vars.MONGO_BASE }}
 
     - name: Test with PyTest ⚙️
       env:
@@ -73,14 +80,28 @@ jobs:
     environment:
       name: api
 
-    # Start Redis 🛢️
     services:
+      # Start Redis 🛢️
       redis:
         image: redis:8.10.2
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      # Start MongoDB 🌱
+      mongo:
+        image: mongo:7.0.43
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: singouins
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS }}
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -113,14 +134,6 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-    - name: Start MongoDB 🌱
-      uses: supercharge/mongodb-github-action@1.12.1
-      with:
-        mongodb-version: ${{ vars.MONGO_VERS }}
-        mongodb-username: ${{ vars.MONGO_USER }}
-        mongodb-password: ${{ secrets.MONGO_PASS }}
-        mongodb-db: ${{ vars.MONGO_BASE }}
 
     - name: Test with PyTest ⚙️
       env:
