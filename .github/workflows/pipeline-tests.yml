@@ -20,10 +20,10 @@ jobs:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
 
-    - name: Set up Python ${{ vars.python-version }} 🐍
+    - name: Set up Python 3.14 🐍
       uses: actions/setup-python@v7
       with:
-        python-version: ${{ vars.python-version }}
+        python-version: "3.14"
 
     - name: Install requirements ⏬
       run: |
@@ -90,10 +90,10 @@ jobs:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
 
-    - name: Set up Python ${{ vars.python-version }} [${{ matrix.python-app }}] 🐍
+    - name: Set up Python 3.14 🐍
       uses: actions/setup-python@v7
       with:
-        python-version: ${{ vars.python-version }}
+        python-version: "3.14"
 
     - name: Install requirements ⏬
       run: |
