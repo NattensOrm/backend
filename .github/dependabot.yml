@@ -14,6 +14,10 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "pip"
+    directory: "/auth"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pip"
     directory: "/discord"
     schedule:
       interval: "weekly"
@@ -37,6 +41,10 @@ updates:
       interval: "weekly"
   - package-ecosystem: "docker"
     directory: "/api"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/auth"
     schedule:
       interval: "weekly"
   - package-ecosystem: "docker"
