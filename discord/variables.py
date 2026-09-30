@@ -45,6 +45,10 @@ for var, value in env_vars.items():
         value = f'{value[:4]}...{value[-4:]}'
     logger.debug(f"{var}: {value}")
 
+# Static images (bazaar, ssl_cert, ...) shipped next to this file
+# (/code/resources in the Docker image, discord/resources in a checkout)
+RESOURCES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resources')
+
 
 """
 DISCLAIMER: This is some fat shit I dumped here

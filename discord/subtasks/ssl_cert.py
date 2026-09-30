@@ -7,7 +7,7 @@ from datetime import datetime
 from loguru import logger
 from urllib.request import ssl, socket
 
-from variables import env_vars
+from variables import env_vars, RESOURCES_DIR
 
 
 async def validator(bot: discord.Client, timer: int):
@@ -41,7 +41,7 @@ async def validator(bot: discord.Client, timer: int):
                 days_left = (cert_expires - datetime.now()).days
                 common_name = certificate['subject'][0][0][1]
                 description = f'The SSL cert. for {common_name} expires in **{days_left}** days'
-                file = discord.File('/code/resources/ssl_cert.png', filename='ssl_cert.png')
+                file = discord.File(f'{RESOURCES_DIR}/ssl_cert.png', filename='ssl_cert.png')
 
                 if days_left > 15:
                     # Everything is fine

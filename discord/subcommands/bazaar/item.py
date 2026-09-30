@@ -18,6 +18,7 @@ from variables import (
     metaIndexed,
     rarity_item_types_discord as ritd,
     RARITY_ITEM,
+    RESOURCES_DIR,
     )
 
 
@@ -132,7 +133,7 @@ def item(group_bazaar, bot):
         embed.set_footer(text=f"Account balance: {Satchel.currency.banana} 🍌")
 
         # We add Thumbnail
-        file = discord.File('/code/resources/bazaar_256x256.png', filename='bazaar.png')
+        file = discord.File(f'{RESOURCES_DIR}/bazaar_256x256.png', filename='bazaar.png')
         embed.set_thumbnail(url='attachment://bazaar.png')
 
         await ctx.respond(embed=embed, file=file, ephemeral=True)

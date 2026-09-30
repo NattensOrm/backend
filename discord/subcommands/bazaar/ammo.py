@@ -11,7 +11,7 @@ from mongo.models.Satchel import SatchelDocument
 from subcommands.singouin._autocomplete import get_mysingouins_list
 from subcommands.bazaar._autocomplete import get_singouin_bazaar_ammo_list
 
-from variables import AMMUNITIONS
+from variables import AMMUNITIONS, RESOURCES_DIR
 
 
 def ammo(group_bazaar, bot):
@@ -125,7 +125,7 @@ def ammo(group_bazaar, bot):
         embed.set_footer(text=f"New Account balance: {Satchel.currency.banana} 🍌")
 
         # We add Thumbnail
-        file = discord.File('/code/resources/bazaar_256x256.png', filename='bazaar.png')
+        file = discord.File(f'{RESOURCES_DIR}/bazaar_256x256.png', filename='bazaar.png')
         embed.set_thumbnail(url='attachment://bazaar.png')
 
         await ctx.respond(embed=embed, file=file, ephemeral=True)
