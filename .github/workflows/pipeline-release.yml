@@ -12,9 +12,42 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout 🛎️
+      uses: actions/checkout@v7
+
+    # flake8 parses code with the running Python, so it must match the images'
+    - name: Read Python version from Dockerfile 🔎
+      id: pyver
+      run: |
+        echo "version=$(sed -nE 's/^FROM python:([0-9.]+)-.*/\1/p' api/Dockerfile | head -1)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Python ${{ steps.pyver.outputs.version }} 🐍
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ steps.pyver.outputs.version }}
+        cache: pip
+        cache-dependency-path: requirements-lint.txt
+
+    - name: Install requirements ⏬
+      run: pip install -r requirements-lint.txt
+
+    - name: Lint with flake8 📝
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+
   mongo-pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
+    needs:
+    - lint
 
     services:
       # Start MongoDB 🌱
@@ -46,7 +79,7 @@ jobs:
       with:
         python-version: ${{ steps.pyver.outputs.version }}
         cache: pip
-        cache-dependency-path: mongo/requirements.txt
+        cache-dependency-path: mongo/requirements*.txt
 
     - name: Install requirements ⏬
       run: |
@@ -56,12 +89,8 @@ jobs:
         if [ -f mongo/requirements.txt ]; \
           then pip install -r mongo/requirements.txt; \
         fi
-
-    - name: Lint with flake8 📝
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        echo "--- Linting with flake8"
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        echo "--- Installing test-only requirements"
+        pip install -r mongo/requirements-tests.txt
 
     - name: Test with PyTest ⚙️
       env:
@@ -139,8 +168,6 @@ jobs:
       run: |
         echo "--- Installing PIP"
         python -m pip install --upgrade pip
-        echo "--- Installing PyTest prerequisites"
-        pip install pytest flake8
         echo "--- Installing requirements"
         if [ -f ${{ matrix.python-app }}/requirements.txt ]; \
           then pip install -r ${{ matrix.python-app }}/requirements.txt; \
@@ -149,11 +176,6 @@ jobs:
         if [ -f ${{ matrix.python-app }}/requirements-tests.txt ]; \
           then pip install -r ${{ matrix.python-app }}/requirements-tests.txt; \
         fi
-
-    - name: Lint with flake8 📝
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
     - name: Test with PyTest ⚙️
       env:
@@ -194,7 +216,7 @@ jobs:
           GUNICORN_PORT=5001 /tmp/venv-auth/bin/python3 auth/main.py &
           export AUTH_API_URL=http://127.0.0.1:5001
         fi
-        echo "--- Waiting for app(s) to be ready (`date`)"
+        echo "--- Waiting for app(s) to be ready ($(date))"
         # Retries on connection refused, timeouts and 5xx, gives up after 60s
         wait_for_check() {
           curl -sf -o /dev/null --max-time 5 --retry 60 --retry-delay 1 \
@@ -209,7 +231,7 @@ jobs:
         if [ "${{ matrix.python-app }}" = "api" ]; then
           wait_for_check "$AUTH_API_URL/check"
         fi
-        echo "--- Starting PyTest (`date`)"
+        echo "--- Starting PyTest ($(date))"
         pytest ${{ matrix.python-app }}/tests/
 
   build-push:

@@ -5,6 +5,11 @@
 
 version: 2
 updates:
+  # Lint-only requirements (requirements-lint.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
   - package-ecosystem: "pip"
     directory: "/ai"
     schedule:
