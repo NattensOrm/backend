@@ -190,8 +190,21 @@ jobs:
           GUNICORN_PORT=5001 /tmp/venv-auth/bin/python3 auth/main.py &
           export AUTH_API_URL=http://127.0.0.1:5001
         fi
-        echo "--- Sleep(${{ vars.STARTUP_SLEEP }}) (`date`)"
-        sleep ${{ vars.STARTUP_SLEEP }}
+        echo "--- Waiting for app(s) to be ready (`date`)"
+        # Retries on connection refused, timeouts and 5xx, gives up after 60s
+        wait_for_check() {
+          curl -sf -o /dev/null --max-time 5 --retry 60 --retry-delay 1 \
+            --retry-max-time 60 --retry-connrefused "$1"
+        }
+        if [ "${{ matrix.python-app }}" = "ws" ]; then
+          # ws is WebSocket-only (no /check): wait for its port to accept connections
+          timeout 60 bash -c 'until (: > /dev/tcp/127.0.0.1/5000) 2>/dev/null; do sleep 1; done'
+        else
+          wait_for_check http://127.0.0.1:5000/check
+        fi
+        if [ "${{ matrix.python-app }}" = "api" ]; then
+          wait_for_check "$AUTH_API_URL/check"
+        fi
         echo "--- Starting PyTest (`date`)"
         pytest ${{ matrix.python-app }}/tests/
 
