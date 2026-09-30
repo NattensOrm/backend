@@ -112,7 +112,7 @@ jobs:
       # Run every app's tests even if one fails
       fail-fast: false
       matrix:
-        python-app: [ "ai", "ws", "api", "auth" ]
+        python-app: [ "ai", "ws", "api", "auth", "discord" ]
 
     needs:
     - mongo-pytest
@@ -197,10 +197,11 @@ jobs:
       run: |
         echo "--- Moving mongo lib where it belongs"
         cp -a mongo ${{ matrix.python-app }}/
-        echo "--- Starting app in background"
-        # Used for ai, api, ws, auth
-        if [ -f ${{ matrix.python-app }}/main.py ]
-          then python3 ${{ matrix.python-app }}/main.py &
+        # discord's tests call the bot commands in-process (Discord is mocked),
+        # so there's no app to start - and main.py would try to log into Discord
+        if [ "${{ matrix.python-app }}" != "discord" ]; then
+          echo "--- Starting app in background"
+          python3 ${{ matrix.python-app }}/main.py &
         fi
         # /auth/* moved out of api into its own service - api's own suite
         # still needs a live login (see api/tests/conftest.py's jwt_header
@@ -222,12 +223,18 @@ jobs:
           curl -sf -o /dev/null --max-time 5 --retry 60 --retry-delay 1 \
             --retry-max-time 60 --retry-connrefused "$1"
         }
-        if [ "${{ matrix.python-app }}" = "ws" ]; then
-          # ws is WebSocket-only (no /check): wait for its port to accept connections
-          timeout 60 bash -c 'until (: > /dev/tcp/127.0.0.1/5000) 2>/dev/null; do sleep 1; done'
-        else
-          wait_for_check http://127.0.0.1:5000/check
-        fi
+        case "${{ matrix.python-app }}" in
+          ws)
+            # ws is WebSocket-only (no /check): wait for its port to accept connections
+            timeout 60 bash -c 'until (: > /dev/tcp/127.0.0.1/5000) 2>/dev/null; do sleep 1; done'
+            ;;
+          discord)
+            # Nothing started, nothing to wait for
+            ;;
+          *)
+            wait_for_check http://127.0.0.1:5000/check
+            ;;
+        esac
         if [ "${{ matrix.python-app }}" = "api" ]; then
           wait_for_check "$AUTH_API_URL/check"
         fi
