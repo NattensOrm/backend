@@ -18,6 +18,7 @@ jobs:
     services:
       # Start MongoDB 🌱
       mongo:
+        # Keep in sync with production MongoDB version
         image: mongo:7.0.43
         ports:
           - 27017:27017
@@ -34,10 +35,15 @@ jobs:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
 
-    - name: Set up Python 3.14 🐍
+    - name: Read Python version from Dockerfile 🔎
+      id: pyver
+      run: |
+        echo "version=$(sed -nE 's/^FROM python:([0-9.]+)-.*/\1/p' api/Dockerfile | head -1)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Python ${{ steps.pyver.outputs.version }} 🐍
       uses: actions/setup-python@v7
       with:
-        python-version: "3.14"
+        python-version: ${{ steps.pyver.outputs.version }}
 
     - name: Install requirements ⏬
       run: |
@@ -84,6 +90,7 @@ jobs:
     services:
       # Start Redis 🛢️
       redis:
+        # Keep in sync with production Redis version
         image: redis:8.10.2
         ports:
           - 6379:6379
@@ -95,6 +102,7 @@ jobs:
 
       # Start MongoDB 🌱
       mongo:
+        # Keep in sync with production MongoDB version
         image: mongo:7.0.43
         ports:
           - 27017:27017
@@ -111,10 +119,15 @@ jobs:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
 
-    - name: Set up Python 3.14 🐍
+    - name: Read Python version from Dockerfile 🔎
+      id: pyver
+      run: |
+        echo "version=$(sed -nE 's/^FROM python:([0-9.]+)-.*/\1/p' ${{ matrix.python-app }}/Dockerfile | head -1)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Python ${{ steps.pyver.outputs.version }} 🐍
       uses: actions/setup-python@v7
       with:
-        python-version: "3.14"
+        python-version: ${{ steps.pyver.outputs.version }}
 
     - name: Install requirements ⏬
       run: |
