@@ -1,5 +1,5 @@
-# This workflow will install Python dependencies, run tests with a single version of Python
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# Runs lint + tests on every v* tag,
+# then builds and pushes the versioned Docker images
 
 name: Pipeline Release (ALL)
 
@@ -78,13 +78,13 @@ jobs:
     timeout-minutes: 5
 
     strategy:
+      # Run every app's tests even if one fails
+      fail-fast: false
       matrix:
         python-app: [ "ai", "ws", "api", "auth" ]
 
     needs:
     - mongo-pytest
-
-    if: ${{ needs.mongo-pytest.result == 'success' }}
 
     environment:
       name: api
@@ -218,9 +218,6 @@ jobs:
 
     needs:
     - app-pytest
-
-    # We need to have a successful app-pytest before
-    if: ${{ needs.app-pytest.result == 'success' }}
 
     steps:
     - name: Checkout 🛎️
