@@ -204,8 +204,8 @@ jobs:
     needs:
     - app-pytest
 
-    # We need to have a successful app-pytest before
-    if: ${{ needs.app-pytest.result == 'success' }}
+    # Only push images on master pushes, never on pull requests
+    if: github.event_name == 'push'
 
     steps:
     - name: Checkout 🛎️
