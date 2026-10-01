@@ -52,7 +52,7 @@ def test_singouins_auth_login_does_not_leak_username_existence():
     # which response they got. Both must now be identical.
     unknown_user_response = requests.post(
         f'{API_URL}/login',
-        json={'username': 'does-not-exist@exemple.net', 'password': 'plop'},
+        json={'username': 'does-not-exist@example.net', 'password': 'plop'},
         )
     wrong_password_response = requests.post(
         f'{API_URL}/login',
@@ -163,7 +163,7 @@ def test_singouins_auth_logout_also_revokes_refresh_token():
 
 
 def test_singouins_auth_confirm_happy_path():
-    mail = 'confirm-happy@exemple.net'
+    mail = 'confirm-happy@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
@@ -190,7 +190,7 @@ def test_singouins_auth_confirm_unknown_user():
     # Write a token directly to Redis, the same way generate_confirmation_
     # token() does, for an email that was never registered.
     token = secrets.token_urlsafe(16)
-    r.set(f"{API_ENV}:auth:confirm_token:{token}", "ghost@exemple.net", ex=60)
+    r.set(f"{API_ENV}:auth:confirm_token:{token}", "ghost@example.net", ex=60)
 
     response = requests.get(f'{API_URL}/confirm/{token}')
     assert response.status_code == 200
@@ -206,12 +206,12 @@ def test_singouins_auth_confirm_invalid_token():
 def test_singouins_auth_resend_unknown_email_looks_identical_to_known():
     # Same enumeration-safety principle as login: an unknown email must
     # get back the exact same response as a real, unconfirmed one.
-    mail = 'resend-target@exemple.net'
+    mail = 'resend-target@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
     known_response = requests.post(f'{API_URL}/resend', json={'mail': mail})
-    unknown_response = requests.post(f'{API_URL}/resend', json={'mail': 'does-not-exist@exemple.net'})  # noqa: E501
+    unknown_response = requests.post(f'{API_URL}/resend', json={'mail': 'does-not-exist@example.net'})  # noqa: E501
 
     assert known_response.status_code == 200
     assert unknown_response.status_code == 200
@@ -224,7 +224,7 @@ def test_singouins_auth_resend_unknown_email_looks_identical_to_known():
 
 
 def test_singouins_auth_resend_issues_a_working_token():
-    mail = 'resend-works@exemple.net'
+    mail = 'resend-works@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
@@ -246,7 +246,7 @@ def test_singouins_auth_resend_issues_a_working_token():
 
 
 def test_singouins_auth_resend_already_confirmed():
-    mail = 'resend-already-active@exemple.net'
+    mail = 'resend-already-active@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
@@ -266,12 +266,12 @@ def test_singouins_auth_resend_already_confirmed():
 
 def test_singouins_auth_forgot_password_unknown_email_looks_identical_to_known():
     # Same enumeration-safety principle as login/resend.
-    mail = 'forgot-target@exemple.net'
+    mail = 'forgot-target@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
     known_response = requests.post(f'{API_URL}/forgot-password', json={'mail': mail})  # noqa: E501
-    unknown_response = requests.post(f'{API_URL}/forgot-password', json={'mail': 'does-not-exist@exemple.net'})  # noqa: E501
+    unknown_response = requests.post(f'{API_URL}/forgot-password', json={'mail': 'does-not-exist@example.net'})  # noqa: E501
 
     assert known_response.status_code == 200
     assert unknown_response.status_code == 200
@@ -284,7 +284,7 @@ def test_singouins_auth_forgot_password_unknown_email_looks_identical_to_known()
 
 
 def test_singouins_auth_reset_password_works():
-    mail = 'reset-works@exemple.net'
+    mail = 'reset-works@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'old-password', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
@@ -319,7 +319,7 @@ def test_singouins_auth_reset_password_invalid_token():
 def test_singouins_auth_reset_password_is_single_use():
     # Regression-shaped test: a reset token must not be replayable, unlike
     # a confirmation token - reusing it after a successful reset must fail.
-    mail = 'reset-single-use@exemple.net'
+    mail = 'reset-single-use@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'old-password', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 
@@ -339,7 +339,7 @@ def test_singouins_auth_reset_password_is_single_use():
 
 
 def test_singouins_auth_reset_password_revokes_refresh_token():
-    mail = 'reset-revokes@exemple.net'
+    mail = 'reset-revokes@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'old-password', 'mail': mail})  # noqa: E501
     assert response.status_code in (200, 201)
 

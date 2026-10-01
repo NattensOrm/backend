@@ -15,7 +15,7 @@ r = redis.StrictRedis(
     encoding='utf-8',
     )
 
-USER_NAME       = 'user@exemple.net'
+USER_NAME       = 'user@example.net'
 USER_ID         = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 
 AUTH_PAYLOAD    = {'username': USER_NAME, 'password': 'plop'}

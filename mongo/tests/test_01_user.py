@@ -10,7 +10,7 @@ sys.path.append(LOCAL_PATH)
 
 from mongo.models.User import UserDocument, UserDiscord  # noqa: E402
 
-USER_NAME = 'user@exemple.net'
+USER_NAME = 'user@example.net'
 USER_ID = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 USER_HASH = 'PYTEST_HASH_PLACEHOLDER'
 

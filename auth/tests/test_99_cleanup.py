@@ -11,7 +11,7 @@ def test_singouins_auth_delete_ignores_spoofed_username():
     # no ownership check, letting any authenticated user delete anyone
     # else's account (IDOR). Uses a disposable second account so the shared
     # session user (USER_NAME) is left untouched for the real cleanup below.
-    attacker_name = 'idor-attacker@exemple.net'
+    attacker_name = 'idor-attacker@example.net'
     response = requests.post(f'{API_URL}/register', json={'password': 'plop', 'mail': attacker_name})  # noqa: E501
     assert response.status_code in (200, 201, 409)
 

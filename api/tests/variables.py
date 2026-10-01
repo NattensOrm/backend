@@ -26,7 +26,7 @@ r = redis.StrictRedis(
 # uuid.uuid3(uuid.NAMESPACE_DNS, CREATURE_NAME)
 CREATURE_NAME   = 'PJTest'
 CREATURE_ID     = str(uuid.uuid3(uuid.NAMESPACE_DNS, CREATURE_NAME))
-USER_NAME       = 'user@exemple.net'
+USER_NAME       = 'user@example.net'
 USER_ID         = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 SQUAD_ID        = str(uuid.uuid3(uuid.NAMESPACE_DNS, CREATURE_NAME))
 

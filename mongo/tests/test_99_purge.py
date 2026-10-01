@@ -17,7 +17,7 @@ from mongo.models.User import UserDocument  # noqa: E402
 CREATURE_NAME = 'PyTest Creature'
 CREATURE_ID = str(uuid.uuid3(uuid.NAMESPACE_DNS, CREATURE_NAME))
 
-USER_NAME = 'user@exemple.net'
+USER_NAME = 'user@example.net'
 USER_ID = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 USER_HASH = 'PYTEST_HASH_PLACEHOLDER'
 

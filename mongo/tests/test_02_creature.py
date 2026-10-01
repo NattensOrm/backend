@@ -19,7 +19,7 @@ CREATURE_P = 40
 CREATURE_R = 50
 CREATURE_V = 60
 CREATURE_CURRENCY_AMOUNT = 1000
-USER_NAME = 'user@exemple.net'
+USER_NAME = 'user@example.net'
 USER_ID = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 
 
