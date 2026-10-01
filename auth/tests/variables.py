@@ -19,3 +19,7 @@ USER_NAME       = 'user@example.net'
 USER_ID         = str(uuid.uuid3(uuid.NAMESPACE_DNS, USER_NAME))
 
 AUTH_PAYLOAD    = {'username': USER_NAME, 'password': 'plop'}
+
+# Fake SMTP server catching auth's mails (Mailpit, see the CI workflows).
+# Unset = no Mailpit available: the mail tests are skipped
+MAILPIT_URL     = os.environ.get("MAILPIT_URL")

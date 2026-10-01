@@ -148,6 +148,19 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      # Start Mailpit 📫
+      # Fake SMTP server: catches auth's mails, readable through its HTTP API
+      mailpit:
+        image: axllent/mailpit:v1.31.3
+        ports:
+          - 1465:1025   # SMTP, implicit TLS like production
+          - 8025:8025   # HTTP API, used by auth/tests/test_02_mail.py
+        env:
+          MP_SMTP_TLS_CERT: sans:localhost   # self-signed cert, generated at start
+          MP_SMTP_TLS_KEY: sans:localhost
+          MP_SMTP_REQUIRE_TLS: true
+          MP_SMTP_AUTH_ACCEPT_ANY: true
+
     steps:
     - name: Checkout 🛎️
       uses: actions/checkout@v7
@@ -189,14 +202,14 @@ jobs:
           MONGO_USER: ${{ vars.MONGO_USER }}
           MONGO_PASS: ${{ secrets.MONGO_PASS }}
 
-          # Fake SMTP: auth needs these to start, but CI must never send real
-          # mails. Nothing listens on 127.0.0.1:465, so every send fails fast
-          # and takes the "mail KO" path - tests read tokens from Redis instead
+          # CI must never send real mails: auth's SMTP points to the Mailpit
+          # service, which catches them (any credentials are accepted)
           SEP_SMTP_FROM: ci@example.net
-          SEP_SMTP_SERVER: 127.0.0.1
+          SEP_SMTP_SERVER: 127.0.0.1:1465
           SEP_SMTP_USER: ci
           SEP_SMTP_PASS: ci
           SEP_SMTP_HOSTNAME: localhost
+          MAILPIT_URL: http://127.0.0.1:8025
       run: |
         echo "--- Moving mongo lib where it belongs"
         cp -a mongo ${{ matrix.python-app }}/
