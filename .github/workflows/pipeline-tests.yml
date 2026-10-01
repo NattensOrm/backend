@@ -197,11 +197,14 @@ jobs:
           MONGO_USER: ${{ vars.MONGO_USER }}
           MONGO_PASS: ${{ secrets.MONGO_PASS }}
 
-          SEP_SMTP_FROM: ${{ secrets.SEP_SMTP_FROM }}
-          SEP_SMTP_SERVER: ${{ secrets.SEP_SMTP_SERVER }}
-          SEP_SMTP_USER: ${{ secrets.SEP_SMTP_USER }}
-          SEP_SMTP_PASS: ${{ secrets.SEP_SMTP_PASS }}
-          SEP_SMTP_HOSTNAME: ${{ secrets.SEP_SMTP_HOSTNAME }}
+          # Fake SMTP: auth needs these to start, but CI must never send real
+          # mails. Nothing listens on 127.0.0.1:465, so every send fails fast
+          # and takes the "mail KO" path - tests read tokens from Redis instead
+          SEP_SMTP_FROM: ci@example.net
+          SEP_SMTP_SERVER: 127.0.0.1
+          SEP_SMTP_USER: ci
+          SEP_SMTP_PASS: ci
+          SEP_SMTP_HOSTNAME: localhost
       run: |
         echo "--- Moving mongo lib where it belongs"
         cp -a mongo ${{ matrix.python-app }}/
