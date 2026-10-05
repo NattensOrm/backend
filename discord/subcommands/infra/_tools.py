@@ -2,6 +2,10 @@
 
 import re
 
+# Timeout (seconds) for one K8s API call: without it, a hung API server
+# blocks the call (and its thread) forever
+K8S_REQUEST_TIMEOUT = 10
+
 # Max length of the lines kept (Discord embeds stop at 4096 chars)
 LOG_MAX_LENGTH = 2000
 

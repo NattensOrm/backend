@@ -9,7 +9,7 @@ from discord.commands import option
 from discord.ext import commands
 from kubernetes import config
 
-from subcommands.infra._tools import log_pretty
+from subcommands.infra._tools import K8S_REQUEST_TIMEOUT, log_pretty
 
 #
 # Globals used to build the ENV VAR for the batch
@@ -200,9 +200,12 @@ def deploy(group_admin):
                     ),
                 )
 
-            api_response = client.BatchV1Api().create_namespaced_job(
+            # K8s calls run in a thread: the bot keeps running meanwhile
+            api_response = await asyncio.to_thread(
+                client.BatchV1Api().create_namespaced_job,
                 body=job,
                 namespace=namespace,
+                _request_timeout=K8S_REQUEST_TIMEOUT,
                 )
             logger.debug(f'{h} ├──> K8s Query Ended')
         except client.ApiException as e:
@@ -257,9 +260,11 @@ def deploy(group_admin):
 
                 finished = {}
                 try:
-                    api_response = client.BatchV1Api().read_namespaced_job_status(
+                    api_response = await asyncio.to_thread(
+                        client.BatchV1Api().read_namespaced_job_status,
                         name=job_name,
                         namespace=namespace,
+                        _request_timeout=K8S_REQUEST_TIMEOUT,
                         )
                 except Exception as e:
                     if getattr(e, 'status', None) == 404:
@@ -317,10 +322,12 @@ def deploy(group_admin):
                     log = None
                     log_error = None
                     try:
-                        pod = client.CoreV1Api().list_namespaced_pod(
+                        pod = await asyncio.to_thread(
+                            client.CoreV1Api().list_namespaced_pod,
                             namespace,
                             # Set by K8s on the pods of this Job only
                             label_selector=f"job-name={job_name}",
+                            _request_timeout=K8S_REQUEST_TIMEOUT,
                             )
                         if pod.items:
                             # With retries there is one pod per attempt
@@ -328,10 +335,12 @@ def deploy(group_admin):
                                 pod.items,
                                 key=lambda p: p.metadata.creation_timestamp,
                                 )
-                            log = client.CoreV1Api().read_namespaced_pod_log(
+                            log = await asyncio.to_thread(
+                                client.CoreV1Api().read_namespaced_pod_log,
                                 name=latest.metadata.name,
                                 since_seconds=1728000,
                                 namespace=namespace,
+                                _request_timeout=K8S_REQUEST_TIMEOUT,
                                 )
                             logger.trace(log)
                         else:
@@ -363,13 +372,15 @@ def deploy(group_admin):
 
                     # Now we delete the Job
                     try:
-                        client.BatchV1Api().delete_namespaced_job(
+                        await asyncio.to_thread(
+                            client.BatchV1Api().delete_namespaced_job,
                             name=job_name,
                             namespace=namespace,
                             body=client.V1DeleteOptions(
                                 propagation_policy='Foreground',
                                 grace_period_seconds=0,
                                 ),
+                            _request_timeout=K8S_REQUEST_TIMEOUT,
                             )
                     except Exception as e:
                         if getattr(e, 'status', None) == 404:
