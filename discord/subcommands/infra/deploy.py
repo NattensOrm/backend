@@ -18,6 +18,16 @@ CUST_OUTPUT_PATH = '/var/www/websites'
 CUST_DOMAIN = 'singouins.com'
 CUST_SUBDOMAIN = 'games'
 
+#
+# Timeouts (seconds)
+#
+# K8s fails the Job after this, retries and Pending time included
+JOB_DEADLINE = 600
+# K8s deletes the finished Job after this, if the bot did not
+JOB_TTL = 300
+# Bot stops waiting after this (must stay < 900: Discord token lifetime)
+BOT_TIMEOUT = JOB_DEADLINE + 60
+
 
 def deploy(group_admin):
     @group_admin.command(
@@ -162,6 +172,8 @@ def deploy(group_admin):
                     ),
                 spec=client.V1JobSpec(
                     backoff_limit=4,
+                    active_deadline_seconds=JOB_DEADLINE,
+                    ttl_seconds_after_finished=JOB_TTL,
                     parallelism=1,
                     completions=1,
                     template=pod_template,
@@ -193,6 +205,7 @@ def deploy(group_admin):
                 )
             logger.info(f'{h} └──> K8s Query OK - Job created')
 
+            deadline = asyncio.get_running_loop().time() + BOT_TIMEOUT
             job_completed = False
             while not job_completed:
                 description = description + '.'
@@ -216,11 +229,19 @@ def deploy(group_admin):
                     for c in api_response.status.conditions or []
                     if c.type in ('Complete', 'Failed') and c.status == 'True'
                     }
+                # Safety net if K8s never reports a final state
+                timed_out = asyncio.get_running_loop().time() > deadline
 
-                if finished:
+                if finished or timed_out:
                     job_completed = True
 
-                    if 'Failed' in finished:
+                    if not finished:
+                        logger.warning('K8s Query OK - Job timed out')
+                        description += (
+                            f'\n>> Job timed out (no result after {BOT_TIMEOUT}s)'
+                            )
+                        colour = discord.Colour.red()
+                    elif 'Failed' in finished:
                         reason = finished['Failed'].reason
                         logger.warning(f'K8s Query OK - Job failed [{reason}]')
                         description += f'\n>> Job failed ({reason})'
