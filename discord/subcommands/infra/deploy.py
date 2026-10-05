@@ -84,12 +84,22 @@ def deploy(group_admin):
                             image="alpine/git:2.36.2",
                             name=pod_name,
                             image_pull_policy="IfNotPresent",
+                            # Same uid as the files already on the PVC
+                            # (no fsGroup: it would chown the whole volume)
+                            security_context=client.V1SecurityContext(
+                                run_as_user=1000,
+                                run_as_group=1000,
+                                run_as_non_root=True,
+                                allow_privilege_escalation=False,
+                                ),
                             volume_mounts=[
                                 client.V1VolumeMount(name="websites", mount_path=CUST_OUTPUT_PATH),
                                 client.V1VolumeMount(name="deployer-sh", mount_path='/code'),
                                 ],
                             command=["/code/job-front-deployer.sh"],
                             env=[
+                                # uid 1000 has no home in the image
+                                client.V1EnvVar(name='HOME', value='/tmp'),
                                 client.V1EnvVar(name='CUST_GIT_BRANCH', value=f'build-{env}'),
                                 client.V1EnvVar(name='CUST_OUTPUT_PATH', value=CUST_OUTPUT_PATH),
                                 client.V1EnvVar(name='CUST_OUTPUT_FOLDER', value=output_folder),
