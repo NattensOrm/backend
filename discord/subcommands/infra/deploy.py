@@ -29,6 +29,13 @@ JOB_TTL = 300
 BOT_TIMEOUT = JOB_DEADLINE + 60
 
 
+def api_error(e):
+    # str(ApiException) also dumps HTTP headers and body: too verbose
+    if isinstance(e, client.ApiException):
+        return f'K8s API error {e.status} {e.reason}'
+    return str(e)[:200]
+
+
 def deploy(group_admin):
     @group_admin.command(
         description='[@Team role] Deploy latest Front build',
@@ -76,6 +83,8 @@ def deploy(group_admin):
 
             app_name = 'front-deployer'
             pod_name = app_name
+            # One Job per env: DEV and PROD deploys can run side by side
+            job_name = f'{app_name}-{env}-job'
             pod_template = client.V1PodTemplateSpec(
                 spec=client.V1PodSpec(
                     restart_policy="Never",
@@ -169,6 +178,7 @@ def deploy(group_admin):
                     name=pod_name,
                     labels={
                         "name": app_name,
+                        "env": env,
                         },
                     ),
                 )
@@ -178,7 +188,7 @@ def deploy(group_admin):
                 kind="Job",
                 metadata=client.V1ObjectMeta(
                     namespace=namespace,
-                    name=f"{pod_name}-job",
+                    name=job_name,
                     ),
                 spec=client.V1JobSpec(
                     backoff_limit=4,
@@ -195,6 +205,24 @@ def deploy(group_admin):
                 namespace=namespace,
                 )
             logger.debug(f'{h} ├──> K8s Query Ended')
+        except client.ApiException as e:
+            if e.status != 409:
+                logger.error(f'{h} └──> K8s Query KO [{e}]')
+                description = f'Command aborted: {api_error(e)}'
+            else:
+                # The Job of this env still exists: running, or finished
+                # but not deleted yet (JOB_TTL cleans it up)
+                logger.warning(f'{h} └──> K8s Query KO - Job already exists')
+                description = (
+                    f'Command aborted: a deploy is already running for {env} '
+                    f'(or its Job awaits cleanup, up to {JOB_TTL}s)'
+                    )
+            embed = discord.Embed(
+                description=description,
+                colour=discord.Colour.red()
+            )
+            await ctx.respond(embed=embed)
+            return
         except Exception as e:
             logger.error(f'{h} └──> K8s Query KO [{e}]')
             embed = discord.Embed(
@@ -227,18 +255,35 @@ def deploy(group_admin):
                         )
                     )
 
-                api_response = client.BatchV1Api().read_namespaced_job_status(
-                    name=f"{pod_name}-job",
-                    namespace=namespace,
-                    )
-
-                # status.failed is set as soon as one pod fails, even while
-                # the Job is still retrying: only these conditions are final
-                finished = {
-                    c.type: c
-                    for c in api_response.status.conditions or []
-                    if c.type in ('Complete', 'Failed') and c.status == 'True'
-                    }
+                finished = {}
+                try:
+                    api_response = client.BatchV1Api().read_namespaced_job_status(
+                        name=job_name,
+                        namespace=namespace,
+                        )
+                except Exception as e:
+                    if getattr(e, 'status', None) == 404:
+                        # Deleted outside of the bot: nothing left to watch
+                        logger.error(f'{h} └──> K8s Query KO - Job not found')
+                        description += '\n>> Job not found (deleted outside the bot?)'
+                        await ctx.interaction.edit_original_response(
+                            embed=discord.Embed(
+                                title=f'K8s deploy [{env}]',
+                                description=description,
+                                colour=discord.Colour.red()
+                                )
+                            )
+                        break
+                    # Transient: we retry on next tick, BOT_TIMEOUT still applies
+                    logger.warning(f'{h} ├──> K8s Query KO [{api_error(e)}]')
+                else:
+                    # status.failed is set as soon as one pod fails, even while
+                    # the Job is still retrying: only these conditions are final
+                    finished = {
+                        c.type: c
+                        for c in api_response.status.conditions or []
+                        if c.type in ('Complete', 'Failed') and c.status == 'True'
+                        }
                 # Safety net if K8s never reports a final state
                 timed_out = asyncio.get_running_loop().time() > deadline
 
@@ -274,7 +319,8 @@ def deploy(group_admin):
                     try:
                         pod = client.CoreV1Api().list_namespaced_pod(
                             namespace,
-                            label_selector=f"name={app_name}",
+                            # Set by K8s on the pods of this Job only
+                            label_selector=f"job-name={job_name}",
                             )
                         if pod.items:
                             # With retries there is one pod per attempt
@@ -291,12 +337,8 @@ def deploy(group_admin):
                         else:
                             log_error = 'no pod found'
                             logger.warning('K8s Query OK - Logs NotFound')
-                    except client.ApiException as e:
-                        # str(e) also dumps HTTP headers and body: too verbose
-                        log_error = f'K8s API error {e.status} {e.reason}'
-                        logger.error(f'K8s Query KO [{e}]')
                     except Exception as e:
-                        log_error = str(e)[:200]
+                        log_error = api_error(e)
                         logger.error(f'K8s Query KO [{e}]')
 
                     if log is None:
@@ -320,15 +362,27 @@ def deploy(group_admin):
                         description += '```'
 
                     # Now we delete the Job
-                    api_response = client.BatchV1Api().delete_namespaced_job(
-                        name=f"{pod_name}-job",
-                        namespace=namespace,
-                        body=client.V1DeleteOptions(
-                            propagation_policy='Foreground',
-                            grace_period_seconds=0,
-                            ),
-                        )
-                    description += '\n>> Job deleting'
+                    try:
+                        client.BatchV1Api().delete_namespaced_job(
+                            name=job_name,
+                            namespace=namespace,
+                            body=client.V1DeleteOptions(
+                                propagation_policy='Foreground',
+                                grace_period_seconds=0,
+                                ),
+                            )
+                    except Exception as e:
+                        if getattr(e, 'status', None) == 404:
+                            # Already gone (TTL, or deleted by hand)
+                            description += '\n>> Job already deleted'
+                        else:
+                            logger.error(f'K8s Query KO [{e}]')
+                            description += (
+                                f'\n>> Job deletion failed ({api_error(e)}), '
+                                'K8s will clean it up'
+                                )
+                    else:
+                        description += '\n>> Job deleting'
                     await ctx.interaction.edit_original_response(
                         embed=discord.Embed(
                             title=f'K8s deploy [{env}]',
