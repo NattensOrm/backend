@@ -223,6 +223,8 @@ def deploy(group_admin):
                             )
                         )
 
+                    log = None
+                    log_error = None
                     try:
                         pod = client.CoreV1Api().list_namespaced_pod(
                             namespace,
@@ -236,9 +238,21 @@ def deploy(group_admin):
                                 )
                             logger.trace(log)
                         else:
+                            log_error = f'{len(pod.items)} pods found, expected 1'
                             logger.warning('K8s Query OK - Logs NotFound')
-                    except Exception as e:
+                    except client.ApiException as e:
+                        # str(e) also dumps HTTP headers and body: too verbose
+                        log_error = f'K8s API error {e.status} {e.reason}'
                         logger.error(f'K8s Query KO [{e}]')
+                    except Exception as e:
+                        log_error = str(e)[:200]
+                        logger.error(f'K8s Query KO [{e}]')
+
+                    if log is None:
+                        description += f'\n>> Job logs: unavailable ({log_error})'
+                    elif not log.strip():
+                        logger.trace('K8s Query OK - Logs empty')
+                        description += '\n>> Job logs: none (no output)'
                     else:
                         logger.trace('K8s Query OK - Logs fetched')
                         description += '\n>> Job logs:\n```'
@@ -252,6 +266,7 @@ def deploy(group_admin):
                                     colour=discord.Colour.green()
                                     )
                                 )
+                        description += '```'
 
                     # Now we delete the Job
                     api_response = client.BatchV1Api().delete_namespaced_job(
@@ -262,7 +277,7 @@ def deploy(group_admin):
                             grace_period_seconds=0,
                             ),
                         )
-                    description += '```>> Job deleting'
+                    description += '\n>> Job deleting'
                     await ctx.interaction.edit_original_response(
                         embed=discord.Embed(
                             title=f'K8s deploy [{env}]',
