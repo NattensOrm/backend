@@ -27,6 +27,8 @@ JOB_DEADLINE = 600
 JOB_TTL = 300
 # Bot stops waiting after this (must stay < 900: Discord token lifetime)
 BOT_TIMEOUT = JOB_DEADLINE + 60
+# Discord message refresh while the Job runs (the Job is checked every 1s)
+EDIT_INTERVAL = 5
 
 
 def api_error(e):
@@ -246,17 +248,24 @@ def deploy(group_admin):
                 )
             logger.info(f'{h} └──> K8s Query OK - Job created')
 
-            deadline = asyncio.get_running_loop().time() + BOT_TIMEOUT
+            start = asyncio.get_running_loop().time()
+            deadline = start + BOT_TIMEOUT
+            last_edit = start
             job_completed = False
             while not job_completed:
-                description = description + '.'
-                await ctx.interaction.edit_original_response(
-                    embed=discord.Embed(
-                        title=f'K8s deploy [{env}]',
-                        description=description,
-                        colour=discord.Colour.blue()
+                now = asyncio.get_running_loop().time()
+                elapsed = int(now - start)
+                # Status line is not kept in description: it is replaced
+                # on each refresh, and dropped once the Job is finished
+                if now - last_edit >= EDIT_INTERVAL:
+                    last_edit = now
+                    await ctx.interaction.edit_original_response(
+                        embed=discord.Embed(
+                            title=f'K8s deploy [{env}]',
+                            description=f'{description}\n>> Job running ({elapsed}s)',
+                            colour=discord.Colour.blue()
+                            )
                         )
-                    )
 
                 finished = {}
                 try:
@@ -304,11 +313,11 @@ def deploy(group_admin):
                     elif 'Failed' in finished:
                         reason = finished['Failed'].reason
                         logger.warning(f'K8s Query OK - Job failed [{reason}]')
-                        description += f'\n>> Job failed ({reason})'
+                        description += f'\n>> Job failed ({reason}, {elapsed}s)'
                         colour = discord.Colour.red()
                     else:
                         logger.trace('K8s Query OK - Job completed')
-                        description += '\n>> Job completed'
+                        description += f'\n>> Job completed ({elapsed}s)'
                         colour = discord.Colour.green()
 
                     await ctx.interaction.edit_original_response(
@@ -357,18 +366,10 @@ def deploy(group_admin):
                         description += '\n>> Job logs: none (no output)'
                     else:
                         logger.trace('K8s Query OK - Logs fetched')
-                        description += '\n>> Job logs:\n```'
-
-                        for line in log_pretty(log):
-                            description += line
-                            await ctx.interaction.edit_original_response(
-                                embed=discord.Embed(
-                                    title=f'K8s deploy [{env}]',
-                                    description=f'{description}```',
-                                    colour=colour
-                                    )
-                                )
-                        description += '```'
+                        # Shown with the next edit (Job deletion), in one go
+                        description += (
+                            '\n>> Job logs:\n```\n' + ''.join(log_pretty(log)) + '```'
+                            )
 
                     # Now we delete the Job
                     try:

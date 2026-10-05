@@ -100,16 +100,15 @@ def backup(group_admin):
                 await ctx.respond(embed=embed)
                 return
             else:
-                content = ''
-                for line in log_pretty(exec_stdout):
-                    content += line
-                    await ctx.interaction.edit_original_response(
-                        embed=discord.Embed(
-                            title=f'K8s backup {action}',
-                            description=f'```{content}```',
-                            colour=discord.Colour.green()
-                            )
+                # One edit with all lines (not one per line: rate limits)
+                content = ''.join(log_pretty(exec_stdout))
+                await ctx.interaction.edit_original_response(
+                    embed=discord.Embed(
+                        title=f'K8s backup {action}',
+                        description=f'```\n{content}```',
+                        colour=discord.Colour.green()
                         )
+                    )
         elif action == 'status':
             try:
                 logger.info(f'{h} ├──> K8s Query Starting')
@@ -128,16 +127,15 @@ def backup(group_admin):
                 await ctx.respond(embed=embed)
                 return
             else:
-                content = ''
-                for line in log_pretty(exec_stdout):
-                    content += line
-                    await ctx.interaction.edit_original_response(
-                        embed=discord.Embed(
-                            title=f'K8s backup {action}',
-                            description=f'```{content}```',
-                            colour=discord.Colour.green()
-                            )
+                # One edit with all lines (not one per line: rate limits)
+                content = ''.join(log_pretty(exec_stdout))
+                await ctx.interaction.edit_original_response(
+                    embed=discord.Embed(
+                        title=f'K8s backup {action}',
+                        description=f'```\n{content}```',
+                        colour=discord.Colour.green()
                         )
+                    )
 
         logger.info(f'{h} └──> K8s Query OK')
         return
