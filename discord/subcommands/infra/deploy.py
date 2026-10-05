@@ -209,17 +209,32 @@ def deploy(group_admin):
                     namespace=namespace,
                     )
 
-                if api_response.status.succeeded is not None or \
-                        api_response.status.failed is not None:
-                    job_completed = True
-                    logger.trace('K8s Query OK - Job completed')
+                # status.failed is set as soon as one pod fails, even while
+                # the Job is still retrying: only these conditions are final
+                finished = {
+                    c.type: c
+                    for c in api_response.status.conditions or []
+                    if c.type in ('Complete', 'Failed') and c.status == 'True'
+                    }
 
-                    description = description + '\n>> Job completed'
+                if finished:
+                    job_completed = True
+
+                    if 'Failed' in finished:
+                        reason = finished['Failed'].reason
+                        logger.warning(f'K8s Query OK - Job failed [{reason}]')
+                        description += f'\n>> Job failed ({reason})'
+                        colour = discord.Colour.red()
+                    else:
+                        logger.trace('K8s Query OK - Job completed')
+                        description += '\n>> Job completed'
+                        colour = discord.Colour.green()
+
                     await ctx.interaction.edit_original_response(
                         embed=discord.Embed(
                             title=f'K8s deploy [{env}]',
                             description=description,
-                            colour=discord.Colour.green()
+                            colour=colour
                             )
                         )
 
@@ -230,15 +245,20 @@ def deploy(group_admin):
                             namespace,
                             label_selector=f"name={app_name}",
                             )
-                        if len(pod.items) == 1:
+                        if pod.items:
+                            # With retries there is one pod per attempt
+                            latest = max(
+                                pod.items,
+                                key=lambda p: p.metadata.creation_timestamp,
+                                )
                             log = client.CoreV1Api().read_namespaced_pod_log(
-                                name=pod.items[0].metadata.name,
+                                name=latest.metadata.name,
                                 since_seconds=1728000,
                                 namespace=namespace,
                                 )
                             logger.trace(log)
                         else:
-                            log_error = f'{len(pod.items)} pods found, expected 1'
+                            log_error = 'no pod found'
                             logger.warning('K8s Query OK - Logs NotFound')
                     except client.ApiException as e:
                         # str(e) also dumps HTTP headers and body: too verbose
@@ -263,7 +283,7 @@ def deploy(group_admin):
                                 embed=discord.Embed(
                                     title=f'K8s deploy [{env}]',
                                     description=f'{description}```',
-                                    colour=discord.Colour.green()
+                                    colour=colour
                                     )
                                 )
                         description += '```'
@@ -282,7 +302,7 @@ def deploy(group_admin):
                         embed=discord.Embed(
                             title=f'K8s deploy [{env}]',
                             description=description,
-                            colour=discord.Colour.green()
+                            colour=colour
                             )
                         )
                 await asyncio.sleep(1)
