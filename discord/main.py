@@ -132,7 +132,6 @@ except Exception as e:
 else:
     logger.debug(f'[{group_name}] Command Group OK')
     infra.backup(group_admin)
-    infra.deploy(group_admin)
     logger.debug(f'[{group_name}] Commands OK')
 #
 # /mysingouin Commands (for @Singouins)
