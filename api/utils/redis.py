@@ -7,6 +7,13 @@ import yarqueue
 
 from loguru import logger
 
+from utils.pa import (
+    BLUE_PA_MAX,
+    RED_PA_MAX,
+    pa_durations,
+    pa_from_ttl,
+    ttl_after_spend,
+    )
 from variables import env_vars
 
 # This used to be a symlink to a connector shared with auth/discord
@@ -93,20 +100,17 @@ def str2typed(string: str):
     return string
 
 
-def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
+def get_pa(creatureuuid: str, *, tick: int) -> dict:
     """
     Retrieves the blue and red PA and their TTL for a Creature.
 
     :param creatureuuid: The UUID of the creature.
-    :param duration: The duration in seconds for PA calculation. Default is 3600 seconds (1 hour).
+    :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
+                 Red regenerates 1 PA per tick, blue 1 PA per 2 ticks.
 
     :return: A dictionary with PA and TTL information for both blue and red.
     """
-    # Constants
-    RED_PA_MAX = 16
-    RED_PA_MAXTTL = RED_PA_MAX * duration
-    BLUE_PA_MAX = 8
-    BLUE_PA_MAXTTL = BLUE_PA_MAX * duration
+    durations = pa_durations(tick)
 
     ttls = {
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
@@ -114,28 +118,23 @@ def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
     }
 
     return {
-        "blue": {
-            "pa": int(round((BLUE_PA_MAXTTL - abs(ttls['blue'])) / duration)),
-            "ttnpa": ttls['blue'] % duration,
-            "ttl": ttls['blue'],
-        },
-        "red": {
-            "pa": int(round((RED_PA_MAXTTL - abs(ttls['red'])) / duration)),
-            "ttnpa": ttls['red'] % duration,
-            "ttl": ttls['red'],
-        },
+        "blue": pa_from_ttl(ttls['blue'], BLUE_PA_MAX, durations['blue']),
+        "red": pa_from_ttl(ttls['red'], RED_PA_MAX, durations['red']),
     }
 
 
-def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int = 3600) -> None:
+def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, *, tick: int) -> None:
     """
     Consumes a specified number of blue and/or red PAs for a Creature.
 
     :param creatureuuid: The UUID of the creature.
     :param redpa: The number of red PAs to consume (default is 0).
     :param bluepa: The number of blue PAs to consume (default is 0).
-    :param duration: The duration of each PA in seconds (default is 3600 seconds).
+    :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
+                 Each red PA spent costs one tick of TTL, each blue PA two ticks.
     """
+    durations = pa_durations(tick)
+
     ttls = {
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
         "red": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red"),
@@ -143,7 +142,7 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
 
     if bluepa > 0:
         logger.trace(f'Consuming PA (blue:{bluepa})')
-        new_ttl = ttls['blue'] + (bluepa * duration)
+        new_ttl = ttl_after_spend(ttls['blue'], bluepa, durations['blue'])
         if ttls['blue'] > 0:
             # Key still exists (PA count < PA max)
             r.expire(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue", new_ttl)
@@ -153,7 +152,7 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
 
     if redpa > 0:
         logger.trace(f'Consuming PA (red:{redpa})')
-        new_ttl = ttls['red'] + (redpa * duration)
+        new_ttl = ttl_after_spend(ttls['red'], redpa, durations['red'])
         if ttls['red'] > 0:
             # Key still exists (PA count < PA max)
             r.expire(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", new_ttl)

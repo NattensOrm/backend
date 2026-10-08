@@ -18,6 +18,7 @@ from routes.mypc.action.profession._tools import (
     profession_gain,
     profession_scaled,
     )
+from utils.pa import instance_tick
 from utils.redis import get_pa
 from variables import rarity_array
 
@@ -125,7 +126,7 @@ def skinning(creatureuuid, resourceuuid):
             "success": True,
             "msg": msg,
             "payload": {
-                "pa": get_pa(creatureuuid=g.Creature.id),
+                "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
                 "resource": [
                     {
                         "count": resource_skinned['meat'],

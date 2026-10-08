@@ -10,6 +10,7 @@ from loguru import logger
 from mongo.models.Highscore import HighscoreDocument
 
 from routes._decorators import belongs, exists
+from utils.pa import instance_tick
 from utils.redis import r, get_pa
 
 from variables import env_vars
@@ -79,7 +80,7 @@ def tracking(creatureuuid):
             "success": True,
             "msg": msg,
             "payload": {
-                "pa": get_pa(creatureuuid=g.Creature.id),
+                "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
             }
         }
     ), 200

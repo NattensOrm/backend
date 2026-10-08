@@ -11,6 +11,7 @@ from mongo.models.Korp import KorpDocument
 from mongo.models.Squad import SquadDocument
 from mongo.models.User import UserDocument
 
+from utils.pa import instance_tick
 from utils.redis import get_pa
 
 
@@ -195,22 +196,23 @@ def check_creature_pa(red=0, blue=0):
     """ Decorator to check if g.Creature has an amount of PA(red, blue) """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            if get_pa(creatureuuid=g.Creature.id)['blue']['pa'] < blue:
+            pa = get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature))
+            if pa['blue']['pa'] < blue:
                 msg = f'{g.h} Not enough PA(blue) for this action'
                 return jsonify(
                     {
                         "success": False,
                         "msg": msg,
-                        "payload": get_pa(creatureuuid=g.Creature.id),
+                        "payload": pa,
                     }
                 ), 200
-            elif get_pa(creatureuuid=g.Creature.id)['red']['pa'] < red:
+            elif pa['red']['pa'] < red:
                 msg = f'{g.h} Not enough PA(red) for this action'
                 return jsonify(
                     {
                         "success": False,
                         "msg": msg,
-                        "payload": get_pa(creatureuuid=g.Creature.id),
+                        "payload": pa,
                     }
                 ), 200
             else:

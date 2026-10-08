@@ -13,6 +13,7 @@ from utils.decorators import (
     check_creature_pa,
     check_item_exists,
     )
+from utils.pa import instance_tick
 from utils.redis import r, get_pa, consume_pa
 from variables import metaNames
 
@@ -171,7 +172,8 @@ def equip(creatureuuid, type, slotname, itemuuid):
 
     # Here everything should be OK with the equip
     # We consume the PA
-    consume_pa(creatureuuid=creatureuuid, bluepa=PA_COST_BLUE)
+    tick = instance_tick(g.Creature)
+    consume_pa(creatureuuid=creatureuuid, bluepa=PA_COST_BLUE, tick=tick)
 
     # We put the info in queue for ws
     try:
@@ -195,13 +197,14 @@ def equip(creatureuuid, type, slotname, itemuuid):
     # JOB IS DONE
     msg = f'{g.h} Equip Query OK'
     logger.debug(msg)
+    pa = get_pa(creatureuuid=creatureuuid, tick=tick)
     return jsonify(
         {
             "success": True,
             "msg": msg,
             "payload": {
-                "red": get_pa(creatureuuid=creatureuuid)['red'],
-                "blue": get_pa(creatureuuid=creatureuuid)['blue'],
+                "red": pa['red'],
+                "blue": pa['blue'],
                 "creature": g.Creature.to_mongo(),
             },
         }
