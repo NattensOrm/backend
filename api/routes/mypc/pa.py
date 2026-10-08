@@ -5,6 +5,7 @@ from flask_jwt_extended         import jwt_required
 from loguru                     import logger
 
 from utils.decorators import check_creature_exists
+from utils.pa import instance_tick
 from utils.redis import get_pa
 
 
@@ -23,7 +24,7 @@ def pa_get(creatureuuid):
             {
                 "success": True,
                 "msg": msg,
-                "payload": get_pa(creatureuuid=g.Creature.id),
+                "payload": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
             }
         ), 200
     except Exception as e:

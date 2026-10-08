@@ -13,6 +13,7 @@ from mongo.models.Korp import KorpDocument
 from mongo.models.Squad import SquadDocument
 from mongo.models.User import UserDocument
 
+from utils.pa import instance_tick
 from utils.redis import consume_pa, get_pa
 
 
@@ -122,19 +123,21 @@ def pa(red=0, blue=0, consume=False):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            tick = instance_tick(g.Creature)
+            pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
             for color, required in [('red', red), ('blue', blue)]:
-                if get_pa(creatureuuid=g.Creature.id)[color]['pa'] < required:
+                if pa[color]['pa'] < required:
                     return jsonify({
                         "success": False,
                         "msg": f"{g.h} Not enough PA({color}) for this action",
-                        "payload": get_pa(creatureuuid=g.Creature.id),
+                        "payload": pa,
                     }), 200
 
             logger.trace(f'[Creature.id:{g.Creature.id}] has enough PA for this action')
 
             if consume is True and g.Creature.instance:
                 # We consume the PA
-                consume_pa(creatureuuid=g.Creature.id, bluepa=blue, redpa=red)
+                consume_pa(creatureuuid=g.Creature.id, bluepa=blue, redpa=red, tick=tick)
 
             return func(*args, **kwargs)
         return wrapper

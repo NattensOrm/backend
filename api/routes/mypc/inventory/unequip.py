@@ -11,6 +11,7 @@ from utils.decorators import (
     check_creature_pa,
     check_item_exists,
     )
+from utils.pa import instance_tick
 from utils.redis import r, get_pa
 
 #
@@ -84,13 +85,14 @@ def unequip(creatureuuid, type, slotname, itemuuid):
 
     msg = f'{g.h} Unequip OK'
     logger.debug(msg)
+    pa = get_pa(creatureuuid=creatureuuid, tick=instance_tick(g.Creature))
     return jsonify(
         {
             "success": True,
             "msg": msg,
             "payload": {
-                "red": get_pa(creatureuuid=creatureuuid)['red'],
-                "blue": get_pa(creatureuuid=creatureuuid)['blue'],
+                "red": pa['red'],
+                "blue": pa['blue'],
                 "creature": g.Creature.to_mongo(),
             },
         }

@@ -9,6 +9,7 @@ from loguru import logger
 from mongo.models.Satchel import SatchelDocument
 
 from routes._decorators import exists, belongs
+from utils.pa import instance_tick
 from utils.redis import get_pa, consume_pa
 from variables import rarity_array
 
@@ -97,7 +98,8 @@ def catalyze(creatureuuid, itemuuid):
         ), 200
     else:
         # We consume the PA
-        consume_pa(creatureuuid=g.Creature.id, bluepa=PA_COST_BLUE, redpa=PA_COST_RED)
+        tick = instance_tick(g.Creature)
+        consume_pa(creatureuuid=g.Creature.id, bluepa=PA_COST_BLUE, redpa=PA_COST_RED, tick=tick)
 
         msg = f'{g.h} Catalyze Query OK'
         logger.debug(msg)
@@ -107,7 +109,7 @@ def catalyze(creatureuuid, itemuuid):
                 "success": True,
                 "msg": msg,
                 "payload": {
-                    "pa": get_pa(creatureuuid=g.Creature.id),
+                    "pa": get_pa(creatureuuid=g.Creature.id, tick=tick),
                     "item": g.Item.to_mongo(),
                     "satchel": Satchel.to_mongo(),
                 },

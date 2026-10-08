@@ -16,6 +16,7 @@ from routes.mypc.action.profession._tools import (
     profession_gain,
     profession_scaled,
     )
+from utils.pa import instance_tick
 from utils.redis import get_pa
 from variables import rarity_array
 
@@ -84,7 +85,7 @@ def recycling(creatureuuid, itemuuid):
             "success": True,
             "msg": msg,
             "payload": {
-                "pa": get_pa(creatureuuid=g.Creature.id),
+                "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
                 "resource": [
                     {
                         "count": shards_qty,

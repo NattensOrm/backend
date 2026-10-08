@@ -12,6 +12,7 @@ from mongo.models.Satchel import SatchelDocument
 
 from routes._decorators import exists
 from routes.mypc.action.profession._tools import profession_gain
+from utils.pa import instance_tick
 from utils.redis import get_pa
 
 #
@@ -84,7 +85,7 @@ def tanning(creatureuuid):
             "success": True,
             "msg": msg,
             "payload": {
-                "pa": get_pa(creatureuuid=g.Creature.id),
+                "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
                 "resource": [
                     {
                         "count": resource_tanned['fur'],

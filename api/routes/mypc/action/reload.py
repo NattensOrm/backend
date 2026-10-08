@@ -15,6 +15,7 @@ from utils.decorators import (
     check_creature_owned,
     check_creature_pa,
     )
+from utils.pa import instance_tick
 from utils.redis import get_pa, consume_pa
 from variables import metaNames
 
@@ -91,7 +92,8 @@ def reload(creatureuuid, itemuuid):
             }
         Satchel.update(**update_query)
         # We consume the PA
-        consume_pa(creatureuuid=g.Creature.id, bluepa=PA_COST_BLUE)
+        tick = instance_tick(g.Creature)
+        consume_pa(creatureuuid=g.Creature.id, bluepa=PA_COST_BLUE, tick=tick)
     except Exception as e:
         msg = f'{g.h} Reload Query KO [{e}]'
         logger.error(msg)
@@ -105,13 +107,14 @@ def reload(creatureuuid, itemuuid):
     else:
         msg = f'{g.h} Reload Query OK'
         logger.debug(msg)
+        pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
         return jsonify(
             {
                 "success": True,
                 "msg": msg,
                 "payload": {
-                    "red": get_pa(creatureuuid=g.Creature.id)['red'],
-                    "blue": get_pa(creatureuuid=g.Creature.id)['blue'],
+                    "red": pa['red'],
+                    "blue": pa['blue'],
                     "weapon": g.Item.to_mongo(),
                 },
             }
