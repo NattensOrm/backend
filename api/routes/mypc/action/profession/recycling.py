@@ -34,6 +34,7 @@ PROFESSION_NAME = 'recycling'
 @jwt_required()
 # Custom decorators
 @exists.creature
+@belongs.creature_out_of_instance
 @exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
 @exists.item
 @belongs.item_to_creature
