@@ -162,6 +162,22 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
             r.set(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", 'None', ex=new_ttl)
 
 
+def reset_pa(creatureuuid: str) -> None:
+    """
+    Gives a Creature back all its blue and red PA.
+
+    PA pools are stored as expiring keys: an absent key means a full pool,
+    so resetting is simply deleting both keys. Used on instance entry and exit.
+
+    :param creatureuuid: The UUID of the creature.
+    """
+    logger.trace(f'Resetting PA (creatureuuid:{creatureuuid})')
+    r.delete(
+        f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue",
+        f"{env_vars['API_ENV']}:pas:{creatureuuid}:red",
+        )
+
+
 def cput(channel: str, msg: dict) -> None:
     """
     Publishes a message (dict) to a specified Redis PubSub channel.

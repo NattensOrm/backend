@@ -27,7 +27,7 @@ from utils.decorators import (
     check_creature_exists,
     check_is_json,
     )
-from utils.redis import cput, qput
+from utils.redis import cput, qput, reset_pa
 from variables import metaNames, rarity_array, YQ_DISCORD
 
 
@@ -57,6 +57,17 @@ def add(creatureuuid):
                 "payload": e.errors(),
             }
         ), 400
+
+    if g.Creature.instance:
+        msg = f'{g.h} already in Instance({g.Creature.instance})'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
 
     # Check if map related to mapid exists
     try:
@@ -88,6 +99,8 @@ def add(creatureuuid):
         g.Creature.instance = newInstance.id
         g.Creature.updated = datetime.datetime.utcnow()
         g.Creature.save()
+        # Entering an instance gives the Creature back all its PA
+        reset_pa(creatureuuid=g.Creature.id)
     except Exception as e:
         msg = f"{g.h} Instance Query KO [{e}]"
         logger.error(msg)

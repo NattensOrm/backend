@@ -9,12 +9,13 @@ from loguru import logger
 from mongoengine import Q
 
 from mongo.models.Creature import CreatureDocument
+from mongo.models.Instance import InstanceDocument
 
 from utils.decorators import (
     check_creature_exists,
     check_creature_in_instance,
     )
-from utils.redis import r, qput
+from utils.redis import r, qput, reset_pa
 from variables import YQ_DISCORD
 
 
@@ -58,6 +59,8 @@ def leave(creatureuuid, instanceuuid):
             g.Creature.y = None
             g.Creature.updated = datetime.datetime.utcnow()
             g.Creature.save()
+            # Outside an instance there are no PA
+            reset_pa(creatureuuid=g.Creature.id)
         except Exception as e:
             msg = f'{g.h} Instance({g.Instance.id}) Leave KO [{e}]'
             logger.error(msg)
@@ -131,11 +134,19 @@ def leave(creatureuuid, instanceuuid):
         # Other PC are still in the instance
         logger.debug(f'{g.h} Not the last in Instance (pcs:{Players.count()})')
         try:
+            # The Creature may not re-enter this instance later on.
+            # Recorded BEFORE detaching: if this fails, the Creature stays inside
+            # and the "leave KO" answer below is true
+            InstanceDocument.objects(_id=g.Instance.id).update_one(
+                add_to_set__leavers=g.Creature.id,
+                )
             g.Creature.instance = None
             g.Creature.x = None
             g.Creature.y = None
             g.Creature.updated = datetime.datetime.utcnow()
             g.Creature.save()
+            # Outside an instance there are no PA
+            reset_pa(creatureuuid=g.Creature.id)
         except Exception as e:
             msg = f'{g.h} Instance({g.Instance.id}) leave KO [{e}]'
             logger.error(msg)

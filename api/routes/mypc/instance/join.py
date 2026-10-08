@@ -11,7 +11,7 @@ from utils.decorators import (
     check_creature_exists,
     check_instance_exists,
     )
-from utils.redis import qput
+from utils.redis import qput, reset_pa
 from variables import YQ_DISCORD
 
 
@@ -21,8 +21,19 @@ from variables import YQ_DISCORD
 @check_creature_exists
 @check_instance_exists
 def join(creatureuuid, instanceuuid):
-    if hasattr(g.Creature.instance, 'id'):
-        msg = f'{g.h} in in Instance({g.Creature.instance})'
+    if g.Creature.instance:
+        msg = f'{g.h} already in Instance({g.Creature.instance})'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    if g.Creature.id in g.Instance.leavers:
+        msg = f'{g.h} Instance({g.Instance.id}) Join KO: left before, no re-entry'
         logger.warning(msg)
         return jsonify(
             {
@@ -42,6 +53,8 @@ def join(creatureuuid, instanceuuid):
         g.Creature.instance = g.Instance.id
         g.Creature.updated = datetime.datetime.utcnow()
         g.Creature.save()
+        # Entering an instance gives the Creature back all its PA
+        reset_pa(creatureuuid=g.Creature.id)
     except Exception as e:
         msg = f'{g.h} Instance({g.Instance.id}) Query KO [{e}]'
         logger.error(msg)
