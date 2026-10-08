@@ -11,7 +11,7 @@ from utils.decorators import (
     check_creature_exists,
     check_instance_exists,
     )
-from utils.redis import qput, reset_pa
+from utils.redis import qput
 from variables import YQ_DISCORD
 
 
@@ -53,8 +53,6 @@ def join(creatureuuid, instanceuuid):
         g.Creature.instance = g.Instance.id
         g.Creature.updated = datetime.datetime.utcnow()
         g.Creature.save()
-        # Entering an instance gives the Creature back all its PA
-        reset_pa(creatureuuid=g.Creature.id)
     except Exception as e:
         msg = f'{g.h} Instance({g.Instance.id}) Query KO [{e}]'
         logger.error(msg)

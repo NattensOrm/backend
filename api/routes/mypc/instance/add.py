@@ -27,7 +27,7 @@ from utils.decorators import (
     check_creature_exists,
     check_is_json,
     )
-from utils.redis import cput, qput, reset_pa
+from utils.redis import cput, qput
 from variables import metaNames, rarity_array, YQ_DISCORD
 
 
@@ -99,8 +99,6 @@ def add(creatureuuid):
         g.Creature.instance = newInstance.id
         g.Creature.updated = datetime.datetime.utcnow()
         g.Creature.save()
-        # Entering an instance gives the Creature back all its PA
-        reset_pa(creatureuuid=g.Creature.id)
     except Exception as e:
         msg = f"{g.h} Instance Query KO [{e}]"
         logger.error(msg)

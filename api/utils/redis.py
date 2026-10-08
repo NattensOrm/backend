@@ -162,20 +162,55 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
             r.set(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", 'None', ex=new_ttl)
 
 
-def reset_pa(creatureuuid: str) -> None:
-    """
-    Gives a Creature back all its blue and red PA.
+# Every Redis key family a Creature can own while inside an Instance.
+# Placeholders: {env} (API_ENV), {instance} (Instance uuid), {creature} (Creature uuid).
+# The bearer segment is matched exactly (never *{creature}*): ids are uuids,
+# and a key is owned by a Creature only when a whole segment is its id.
+CREATURE_KEY_PATTERNS = (
+    # Creature-wide PA pools, not scoped by Instance (see get_pa/consume_pa)
+    '{env}:pas:{creature}:*',
+    # 5-segment actives: effects/statuses/cds, a trailing name after the bearer
+    # (see routes/mypc/actives.py and action/profession/tracking.py)
+    '{env}:{instance}:*:{creature}:*',
+    # Defensive: matches no key written today. Any future 4-segment key ending
+    # with the bearer (e.g. a prefixed ammo key) is covered by construction
+    '{env}:{instance}:*:{creature}',
+    # The resolver's ammo key, as its contract spells it (no API_ENV prefix)
+    '{instance}:ammo:{creature}',
+    )
 
-    PA pools are stored as expiring keys: an absent key means a full pool,
-    so resetting is simply deleting both keys. Used on instance entry and exit.
+
+def purge_creature_keys(creatureuuid: str, instanceuuid: str) -> int:
+    """
+    Deletes every Redis key a Creature owns in an Instance, plus its PA pools.
+
+    Outside an instance nothing of the creature exists in Redis (ruling 2026-10-08):
+    PA pools are expiring keys (absent = full pool), actives and ammo are scoped
+    by Instance. Only the Instance being left is purged, plus the creature-wide
+    PA keys; actives of the same Creature in another Instance are not touched.
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
 
     :param creatureuuid: The UUID of the creature.
+    :param instanceuuid: The UUID of the instance being left.
+
+    :return: The number of deleted keys.
     """
-    logger.trace(f'Resetting PA (creatureuuid:{creatureuuid})')
-    r.delete(
-        f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue",
-        f"{env_vars['API_ENV']}:pas:{creatureuuid}:red",
-        )
+    deleted = 0
+    for pattern in CREATURE_KEY_PATTERNS:
+        match = pattern.format(
+            env=env_vars['API_ENV'],
+            instance=instanceuuid,
+            creature=creatureuuid,
+            )
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (creatureuuid:{creatureuuid}, deleted:{deleted})')
+    return deleted
 
 
 def cput(channel: str, msg: dict) -> None:
