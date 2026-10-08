@@ -79,9 +79,12 @@ class Mob(ABC):
 #
     async def get_pa(self):
         # Constants
+        # Red regenerates 1 PA per Instance tick, blue 1 PA per 2 ticks
+        # (same rule as api/utils/pa.py and the resolver)
         RED_PA_MAX = 16
         BLUE_PA_MAX = 8
-        PA_DURATION = self.instance.tick
+        RED_PA_DURATION = self.instance.tick
+        BLUE_PA_DURATION = 2 * self.instance.tick
 
         # Define a simple class to store PA values
         class PA:
@@ -93,13 +96,15 @@ class Mob(ABC):
             'blue': {
                 'key': f"{env_vars['API_ENV']}:pas:{self.creature.id}:blue",
                 'max_pa': BLUE_PA_MAX,
-                'max_ttl': BLUE_PA_MAX * PA_DURATION,
+                'duration': BLUE_PA_DURATION,
+                'max_ttl': BLUE_PA_MAX * BLUE_PA_DURATION,
                 'current_pa': BLUE_PA_MAX,
             },
             'red': {
                 'key': f"{env_vars['API_ENV']}:pas:{self.creature.id}:red",
                 'max_pa': RED_PA_MAX,
-                'max_ttl': RED_PA_MAX * PA_DURATION,
+                'duration': RED_PA_DURATION,
+                'max_ttl': RED_PA_MAX * RED_PA_DURATION,
                 'current_pa': RED_PA_MAX,
             }
         }
@@ -111,8 +116,10 @@ class Mob(ABC):
         for pa_color, pa_data in pa_info.items():
             try:
                 if await r.exists(pa_data['key']):
+                    # A negative TTL (no expiry) counts as nothing left to wait for
+                    ttl = max(await r.ttl(pa_data['key']), 0)
                     pa_info[pa_color]['current_pa'] = int(
-                        round(pa_data['max_ttl'] - abs(await r.ttl(pa_data['key'])) / PA_DURATION)
+                        round((pa_data['max_ttl'] - ttl) / pa_data['duration'])
                         )
             except Exception as e:
                 # Redis hiccup (pool exhaustion, transient disconnect, ...):
