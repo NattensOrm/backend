@@ -13,6 +13,8 @@ def test_singouins_mypc_create(jwt_header):
 
 def test_singouins_mypc_get(mypc):
     assert mypc['indexed'][CREATURE_ID]['name'] == CREATURE_NAME
+    assert mypc['indexed'][CREATURE_ID]['skills'] == []
+    assert mypc['indexed'][CREATURE_ID]['loadout'] == []
 
 
 def test_singouins_mypc_view(jwt_header):

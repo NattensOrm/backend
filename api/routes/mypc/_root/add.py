@@ -38,6 +38,7 @@ from mongo.models.Satchel import (
     SatchelResource,
     SatchelShard,
 )
+from mongo.models.Skill import SkillDocument
 
 from utils.decorators import check_is_json, check_user_exists
 from variables import metaNames
@@ -276,6 +277,24 @@ def mypc_add():
             ), 200
         else:
             logger.debug(f'{g.h} ProfessionDocument creation OK')
+
+        try:
+            newSkill = SkillDocument(
+                _id=Creature.id,
+            )
+            newSkill.save()
+        except Exception as e:
+            msg = f'{g.h} SkillDocument creation KO [{e}]'
+            logger.error(msg)
+            return jsonify(
+                {
+                    "success": False,
+                    "msg": msg,
+                    "payload": None,
+                }
+            ), 200
+        else:
+            logger.debug(f'{g.h} SkillDocument creation OK')
 
         # Loop over the equipment fields dynamically and get the field names
         for slot, value in Singouin.equipment.__dict__.items():
