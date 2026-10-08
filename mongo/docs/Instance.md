@@ -7,6 +7,7 @@
 ├── creator (UUIDField)
 ├── fast (BooleanField)
 ├── hardcore (BooleanField)
+├── leavers (ListField)
 ├── map (IntField)
 ├── public (BooleanField)
 ├── tick (IntField)

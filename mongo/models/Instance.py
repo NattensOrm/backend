@@ -11,7 +11,7 @@ from mongoengine.fields import (
     # EmbeddedDocumentField,
     IntField,
     # DictField,
-    # ListField,
+    ListField,
     # StringField,
     UUIDField,
 )
@@ -31,6 +31,7 @@ class InstanceDocument(Document):
     - creator   (UUIDField)
     - fast      (BooleanField)
     - hardcore  (BooleanField)
+    - leavers   (ListField)
     - map       (IntField)
     - public    (BooleanField)
     - tick      (IntField)
@@ -41,6 +42,8 @@ class InstanceDocument(Document):
     creator = UUIDField(binary=False, required=True)
     fast = BooleanField(required=True, default=False)
     hardcore = BooleanField(required=True, default=False)
+    # Creatures (uuids) that left this instance and may not re-enter it
+    leavers = ListField(UUIDField(binary=False), default=list)
     map = IntField(required=True)
     public = BooleanField(required=True, default=True)
     tick = IntField(required=True, default=3600)
