@@ -42,20 +42,43 @@ else:
 # got dropped.
 
 
-def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
+def _pa_from_ttl(ttl: int, pa_max: int, duration: int) -> dict:
+    """
+    Converts the Redis TTL of a PA pool into the PA available right now.
+    Same semantics as api/utils/pa.py's pa_from_ttl(), kept local on purpose.
+
+    :param ttl: The raw TTL returned by Redis (negative when the key is absent).
+    :param pa_max: The pool size.
+    :param duration: Seconds needed to regenerate one PA.
+
+    :return: {'pa': available PA, 'ttnpa': seconds to the next PA, 'ttl': the raw TTL}
+    """
+    # A negative TTL (-2 key absent, -1 no expiry) counts as nothing to wait for
+    remaining = max(ttl, 0)
+
+    return {
+        "pa": int(round((pa_max * duration - remaining) / duration)),
+        "ttnpa": remaining % duration,
+        "ttl": ttl,
+    }
+
+
+def get_pa(creatureuuid: str, *, tick: int) -> dict:
     """
     Retrieves the blue and red PA and their TTL for a Creature.
 
     :param creatureuuid: The UUID of the creature.
-    :param duration: The duration in seconds for PA calculation. Default is 3600 seconds (1 hour).
+    :param tick: The tick (seconds) of the Creature's Instance (InstanceDocument.tick,
+                 3600 when the Creature is in none). Red regenerates 1 PA per tick,
+                 blue 1 PA per 2 ticks - same rule as api/utils/pa.py.
 
     :return: A dictionary with PA and TTL information for both blue and red.
     """
     # Constants
     RED_PA_MAX = 16
-    RED_PA_MAXTTL = RED_PA_MAX * duration
     BLUE_PA_MAX = 8
-    BLUE_PA_MAXTTL = BLUE_PA_MAX * duration
+    RED_PA_DURATION = tick
+    BLUE_PA_DURATION = 2 * tick
 
     ttls = {
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
@@ -63,16 +86,8 @@ def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
     }
 
     return {
-        "blue": {
-            "pa": int(round((BLUE_PA_MAXTTL - abs(ttls['blue'])) / duration)),
-            "ttnpa": ttls['blue'] % duration,
-            "ttl": ttls['blue'],
-        },
-        "red": {
-            "pa": int(round((RED_PA_MAXTTL - abs(ttls['red'])) / duration)),
-            "ttnpa": ttls['red'] % duration,
-            "ttl": ttls['red'],
-        },
+        "blue": _pa_from_ttl(ttls['blue'], BLUE_PA_MAX, BLUE_PA_DURATION),
+        "red": _pa_from_ttl(ttls['red'], RED_PA_MAX, RED_PA_DURATION),
     }
 
 
