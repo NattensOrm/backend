@@ -3,6 +3,8 @@
 import os
 import sys
 
+from unittest.mock import MagicMock
+
 import fakeredis
 import pytest
 
@@ -13,7 +15,6 @@ sys.path.append(LOCAL_PATH)
 
 from utils.pa import (  # noqa: E402
     BLUE_PA_MAX,
-    DEFAULT_TICK,
     RED_PA_MAX,
     pa_durations,
     pa_from_ttl,
@@ -29,7 +30,6 @@ CREATURE_ID = '00000000-0000-0000-0000-00000000c0fe'
 def test_pa_constants():
     assert RED_PA_MAX == 16
     assert BLUE_PA_MAX == 8
-    assert DEFAULT_TICK == 3600
 
 
 def test_pa_durations_normal_tick():
@@ -149,9 +149,39 @@ def test_consume_pa_zero_is_noop(pa_redis):
     assert not pa_redis.r.exists(f'pytest:pas:{CREATURE_ID}:blue')
 
 
-def test_get_pa_requires_tick(pa_redis):
-    """ The silent 3600 default was the bug: tick is mandatory. """
+def test_tick_is_keyword_only_and_mandatory(pa_redis):
+    """
+    The silent 3600 default was the bug: tick is keyword-only and has no default,
+    None must be passed explicitly to mean "not in an Instance".
+    """
+    with pytest.raises(TypeError):
+        pa_redis.get_pa(CREATURE_ID, 3600)
+    with pytest.raises(TypeError):
+        pa_redis.consume_pa(CREATURE_ID, 0, 1, 3600)
     with pytest.raises(TypeError):
         pa_redis.get_pa(creatureuuid=CREATURE_ID)
     with pytest.raises(TypeError):
         pa_redis.consume_pa(creatureuuid=CREATURE_ID, bluepa=1)
+
+
+@pytest.fixture
+def redis_spy(pa_redis, monkeypatch):
+    """ Wraps the fakeredis client so the tests can assert Redis was never called. """
+    spy = MagicMock(wraps=pa_redis.r)
+    monkeypatch.setattr(pa_redis, 'r', spy)
+    return spy
+
+
+def test_get_pa_outside_instance_is_none(pa_redis, redis_spy):
+    """ Designer ruling: outside an Instance (tick None) there are no PA, Redis is not read. """
+    assert pa_redis.get_pa(creatureuuid=CREATURE_ID, tick=None) is None
+    assert redis_spy.method_calls == []
+
+
+def test_consume_pa_outside_instance_is_noop(pa_redis, redis_spy):
+    """ Designer ruling: outside an Instance (tick None) nothing is consumed nor written. """
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, redpa=2, bluepa=1, tick=None)
+
+    assert redis_spy.method_calls == []
+    assert not pa_redis.r.exists(f'pytest:pas:{CREATURE_ID}:red')
+    assert not pa_redis.r.exists(f'pytest:pas:{CREATURE_ID}:blue')

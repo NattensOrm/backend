@@ -124,6 +124,11 @@ def pa(red=0, blue=0, consume=False):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             tick = instance_tick(g.Creature)
+            if tick is None:
+                # Designer ruling: outside an Instance there are no PA, nothing to check
+                logger.trace(f'[Creature.id:{g.Creature.id}] not in an Instance: no PA check')
+                return func(*args, **kwargs)
+
             pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
             for color, required in [('red', red), ('blue', blue)]:
                 if pa[color]['pa'] < required:
@@ -135,7 +140,7 @@ def pa(red=0, blue=0, consume=False):
 
             logger.trace(f'[Creature.id:{g.Creature.id}] has enough PA for this action')
 
-            if consume is True and g.Creature.instance:
+            if consume is True:
                 # We consume the PA
                 consume_pa(creatureuuid=g.Creature.id, bluepa=blue, redpa=red, tick=tick)
 

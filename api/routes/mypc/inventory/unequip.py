@@ -85,7 +85,9 @@ def unequip(creatureuuid, type, slotname, itemuuid):
 
     msg = f'{g.h} Unequip OK'
     logger.debug(msg)
+    # None outside an Instance (no PA): the payload then carries red/blue as None
     pa = get_pa(creatureuuid=creatureuuid, tick=instance_tick(g.Creature))
+    pa = pa or {'red': None, 'blue': None}
     return jsonify(
         {
             "success": True,

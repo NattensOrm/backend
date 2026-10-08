@@ -6,6 +6,7 @@ import redis
 import yarqueue
 
 from loguru import logger
+from typing import Optional
 
 from utils.pa import (
     BLUE_PA_MAX,
@@ -100,16 +101,22 @@ def str2typed(string: str):
     return string
 
 
-def get_pa(creatureuuid: str, *, tick: int) -> dict:
+def get_pa(creatureuuid: str, *, tick: Optional[int]) -> Optional[dict]:
     """
     Retrieves the blue and red PA and their TTL for a Creature.
 
     :param creatureuuid: The UUID of the creature.
     :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
                  Red regenerates 1 PA per tick, blue 1 PA per 2 ticks.
+                 Mandatory: pass None explicitly when the Creature is not in an Instance,
+                 there are no pools then, Redis is not touched and None is returned.
 
-    :return: A dictionary with PA and TTL information for both blue and red.
+    :return: A dictionary with PA and TTL information for both blue and red,
+             or None when the Creature is not in an Instance.
     """
+    if tick is None:
+        return None
+
     durations = pa_durations(tick)
 
     ttls = {
@@ -123,7 +130,13 @@ def get_pa(creatureuuid: str, *, tick: int) -> dict:
     }
 
 
-def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, *, tick: int) -> None:
+def consume_pa(
+    creatureuuid: str,
+    redpa: int = 0,
+    bluepa: int = 0,
+    *,
+    tick: Optional[int],
+) -> None:
     """
     Consumes a specified number of blue and/or red PAs for a Creature.
 
@@ -132,7 +145,13 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, *, tick: int)
     :param bluepa: The number of blue PAs to consume (default is 0).
     :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
                  Each red PA spent costs one tick of TTL, each blue PA two ticks.
+                 Mandatory: pass None explicitly when the Creature is not in an Instance,
+                 there are no pools then, nothing is consumed and Redis is not touched.
     """
+    if tick is None:
+        logger.trace(f'[Creature.id:{creatureuuid}] not in an Instance: no PA to consume')
+        return
+
     durations = pa_durations(tick)
 
     ttls = {

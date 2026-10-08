@@ -7,13 +7,15 @@
 # PA pools live in Redis as `{API_ENV}:pas:{creatureuuid}:red|blue` whose TTL
 # is the time left until the pool is full again. A missing key (TTL -2, or -1
 # with no expiry) means the pool is full.
+#
+# Designer ruling: outside an Instance there are no PA at all (no Redis read,
+# no Redis write). instance_tick() returns None in that case and the callers
+# skip the pools entirely.
+
+from typing import Optional
 
 RED_PA_MAX = 16
 BLUE_PA_MAX = 8
-
-# InstanceDocument.tick default (seconds). Used when the Creature is not in
-# an Instance, so PA regenerate at the base rate outside combat.
-DEFAULT_TICK = 3600
 
 
 def pa_durations(tick: int) -> dict:
@@ -66,24 +68,25 @@ def ttl_after_spend(ttl: int, spent: int, duration: int) -> int:
     return max(ttl, 0) + spent * duration
 
 
-def instance_tick(creature) -> int:
+def instance_tick(creature) -> Optional[int]:
     """
-    Tick of the Instance the Creature is in, or DEFAULT_TICK when it is in none
-    (or the Instance no longer exists).
+    Tick of the Instance the Creature is in, or None when it is in none
+    (or the Instance no longer exists): not in an Instance means no PA.
 
     Reuses flask's g.Instance when a decorator already loaded it for this
     request, to avoid a second Mongo query.
 
     :param creature: The CreatureDocument.
 
-    :return: The tick in seconds.
+    :return: The tick in seconds, or None (not in an Instance: no PA).
     """
     # Lazy imports keep this module importable without a Mongo connection for the unit tests
     from flask import g
+    from loguru import logger
     from mongo.models.Instance import InstanceDocument
 
     if not creature.instance:
-        return DEFAULT_TICK
+        return None
 
     Instance = getattr(g, 'Instance', None)
     if Instance is not None and Instance.id == creature.instance:
@@ -92,4 +95,7 @@ def instance_tick(creature) -> int:
     try:
         return InstanceDocument.objects(_id=creature.instance).get().tick
     except InstanceDocument.DoesNotExist:
-        return DEFAULT_TICK
+        logger.warning(
+            f'[Creature.id:{creature.id}] InstanceDocument({creature.instance}) NOTFOUND: no PA'
+            )
+        return None
