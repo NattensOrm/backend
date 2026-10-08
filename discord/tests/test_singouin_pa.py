@@ -38,11 +38,29 @@ async def test_pa_displays_bars(bot, make_ctx, get_callback, make_creature, pa_s
     await callback(ctx, str(creature.id))
 
     assert ctx.respond.call_count == 1
-    pa_stub.assert_called_once_with(creatureuuid=str(creature.id))
+    # No Instance on this creature: the PA read falls back to the default tick
+    pa_stub.assert_called_once_with(creatureuuid=str(creature.id), tick=3600)
     embed = ctx.respond.call_args.kwargs['embed']
     field = embed.fields[0]
     assert '(16/16)' in field.value
     assert '(8/8)' in field.value
+
+
+async def test_pa_uses_instance_tick(
+    bot, make_ctx, get_callback, make_creature, make_instance, pa_stub
+):
+    instance = make_instance(tick=60)
+    creature = make_creature(name='Speedy', instance=instance.id)
+
+    group = bot.create_group(name='mysingouin', description='test')
+    pa_command(group)
+    callback = get_callback(group, 'pa')
+
+    ctx = make_ctx()
+    await callback(ctx, str(creature.id))
+
+    assert ctx.respond.call_count == 1
+    pa_stub.assert_called_once_with(creatureuuid=str(creature.id), tick=60)
 
 
 async def test_pa_unknown_creature_responds_once(bot, make_ctx, get_callback):

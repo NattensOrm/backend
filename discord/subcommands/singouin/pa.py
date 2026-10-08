@@ -7,6 +7,7 @@ from discord.ext import commands
 from loguru import logger
 
 from mongo.models.Creature import CreatureDocument
+from mongo.models.Instance import InstanceDocument
 
 from subcommands.singouin._autocomplete import get_mysingouins_list
 from subcommands.singouin._tools import creature_sprite
@@ -40,7 +41,14 @@ def pa(group_singouin):
 
         try:
             Creature = CreatureDocument.objects(_id=singouinuuid).get()
-            PA = get_pa(creatureuuid=singouinuuid)
+            # PA regenerate at the pace of the Instance tick (3600s outside one)
+            tick = 3600
+            if Creature.instance:
+                try:
+                    tick = InstanceDocument.objects(_id=Creature.instance).get().tick
+                except InstanceDocument.DoesNotExist:
+                    logger.warning(f'{h} ├──> InstanceDocument Query KO (404), using default tick')
+            PA = get_pa(creatureuuid=singouinuuid, tick=tick)
 
             embed = discord.Embed(
                 title=Creature.name,
