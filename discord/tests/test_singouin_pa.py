@@ -27,7 +27,7 @@ def pa_stub():
         yield stub
 
 
-async def test_pa_displays_bars(bot, make_ctx, get_callback, make_creature, pa_stub):
+async def test_pa_outside_instance_has_no_pa(bot, make_ctx, get_callback, make_creature, pa_stub):
     creature = make_creature(name='Bobby')
 
     group = bot.create_group(name='mysingouin', description='test')
@@ -38,12 +38,12 @@ async def test_pa_displays_bars(bot, make_ctx, get_callback, make_creature, pa_s
     await callback(ctx, str(creature.id))
 
     assert ctx.respond.call_count == 1
-    # No Instance on this creature: the PA read falls back to the default tick
-    pa_stub.assert_called_once_with(creatureuuid=str(creature.id), tick=3600)
+    # No Instance on this creature: designer ruling, no PA at all, Redis is not read
+    pa_stub.assert_not_called()
     embed = ctx.respond.call_args.kwargs['embed']
-    field = embed.fields[0]
-    assert '(16/16)' in field.value
-    assert '(8/8)' in field.value
+    assert embed.title == 'Bobby'
+    assert 'Not in an Instance' in embed.description
+    assert embed.fields == []
 
 
 async def test_pa_uses_instance_tick(
@@ -61,6 +61,10 @@ async def test_pa_uses_instance_tick(
 
     assert ctx.respond.call_count == 1
     pa_stub.assert_called_once_with(creatureuuid=str(creature.id), tick=60)
+    embed = ctx.respond.call_args.kwargs['embed']
+    field = embed.fields[0]
+    assert '(16/16)' in field.value
+    assert '(8/8)' in field.value
 
 
 async def test_pa_unknown_creature_responds_once(bot, make_ctx, get_callback):

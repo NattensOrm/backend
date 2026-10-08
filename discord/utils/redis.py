@@ -68,9 +68,9 @@ def get_pa(creatureuuid: str, *, tick: int) -> dict:
     Retrieves the blue and red PA and their TTL for a Creature.
 
     :param creatureuuid: The UUID of the creature.
-    :param tick: The tick (seconds) of the Creature's Instance (InstanceDocument.tick,
-                 3600 when the Creature is in none). Red regenerates 1 PA per tick,
-                 blue 1 PA per 2 ticks - same rule as api/utils/pa.py.
+    :param tick: The tick (seconds) of the Creature's Instance (InstanceDocument.tick).
+                 Red regenerates 1 PA per tick, blue 1 PA per 2 ticks - same rule as
+                 api/utils/pa.py. Outside an Instance there are no PA: do not call this.
 
     :return: A dictionary with PA and TTL information for both blue and red.
     """
