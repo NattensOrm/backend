@@ -79,7 +79,8 @@ def test_singouins_mypc_instance_leave_purges_everything(jwt_header, mypc):
         r.hset(key, mapping=ACTIVE)
         r.expire(key, 9000)
     r.set(f"{instance_id}:ammo:{CREATURE_ID}", 10)
-    # Another creature's active in the same instance must survive
+    # Another bearer's active in the same instance (a mob, say): the instance
+    # closes below, so it must go with it
     r.hset(other_key, mapping=ACTIVE)
     r.expire(other_key, 9000)
 
@@ -92,8 +93,10 @@ def test_singouins_mypc_instance_leave_purges_everything(jwt_header, mypc):
     assert r.keys(f"{API_ENV}:pas:{CREATURE_ID}:*") == []
     assert r.keys(f"{API_ENV}:{instance_id}:*:{CREATURE_ID}:*") == []
     assert r.keys(f"{instance_id}:ammo:{CREATURE_ID}") == []
-    assert r.exists(other_key) == 1
-    r.delete(other_key)
+    # A closed instance takes every key scoped by it, whoever the bearer
+    assert r.exists(other_key) == 0
+    assert r.keys(f"{API_ENV}:{instance_id}:*") == []
+    assert r.keys(f"{instance_id}:*") == []
 
     response = requests.get(f'{API_URL}/mypc', headers=jwt_header['access'])
     assert response.status_code == 200
@@ -122,8 +125,11 @@ def test_singouins_mypc_instance_no_reentry(jwt_header, mypc):
     assert response.status_code == 200
     assert response.json().get("success") is True
 
-    # Simulate spent PA
+    # Simulate spent PA, and an active of the player who stays
     r.set(BLUE_KEY, 'None', ex=9000)
+    stayer_key = f"{API_ENV}:{instance_id}:effects:{pcjoin['_id']}:PyTest"
+    r.hset(stayer_key, mapping=ACTIVE)
+    r.expire(stayer_key, 9000)
 
     # PJTest leaves (PJTestInstanceJoin stays, so the instance survives)
     response = requests.post(f"{API_URL}/mypc/{CREATURE_ID}/instance/{instance_id}/leave", headers=jwt_header['access'])  # noqa: E501
@@ -131,6 +137,9 @@ def test_singouins_mypc_instance_no_reentry(jwt_header, mypc):
     assert response.json().get("success") is True
     assert r.exists(BLUE_KEY) == 0
     assert r.exists(RED_KEY) == 0
+    # Only the leaver's keys went: the instance survives, so does the stayer's active
+    assert r.exists(stayer_key) == 1
+    r.delete(stayer_key)
 
     # PJTest may not re-enter an instance it left
     response = requests.post(f"{API_URL}/mypc/{CREATURE_ID}/instance/{instance_id}/join", headers=jwt_header['access'])  # noqa: E501

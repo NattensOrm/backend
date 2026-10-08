@@ -9,7 +9,7 @@ from mongoengine import Q
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
 
-from utils.redis import r, purge_creature_keys
+from utils.redis import r, purge_creature_keys, purge_instance_keys
 
 
 def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> str:
@@ -88,9 +88,13 @@ def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> st
             msg = f'{h} Publish(ai-creature/kill) KO [{e}]'
             logger.error(msg)
 
+        # Nothing of a dead mob may outlive it: its PA pools and actives go
+        purge_creature_keys(creatureuuid=Monster.id, instanceuuid=instance.id)
         # We kill it
         # ALWAYS KILL CREATURE THE LAST
         Monster.delete()
 
     instance.delete()
+    # A deleted Instance takes everything scoped by it with it, whoever the bearer
+    purge_instance_keys(instanceuuid=instance.id)
     return 'closed'

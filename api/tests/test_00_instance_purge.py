@@ -132,3 +132,26 @@ def test_purge_creature_keys_patterns_match_bearer_segment_exactly(purge_redis):
     for pattern in purge_redis.CREATURE_KEY_PATTERNS:
         assert '*{creature}' not in pattern
         assert '{creature}*' not in pattern
+
+
+#
+# purge_instance_keys() against fakeredis
+#
+def test_purge_instance_keys_sweeps_every_bearer_of_the_instance(purge_redis):
+    purged, survivors = _seed(purge_redis.r)
+    seeded = purged + survivors
+    # A closed Instance takes every key scoped by it, whoever the bearer is;
+    # creature-wide PA pools and the other Instance's keys are not its business
+    by_instance = [k for k in seeded if k.startswith((f"{API_ENV}:{INSTANCE}:", f"{INSTANCE}:"))]
+    untouched = [k for k in seeded if k not in by_instance]
+    assert any(OTHER_CREATURE in k for k in by_instance)
+
+    deleted = purge_redis.purge_instance_keys(instanceuuid=INSTANCE)
+
+    assert deleted == len(by_instance)
+    assert sorted(k.decode() for k in purge_redis.r.keys('*')) == sorted(untouched)
+
+
+def test_purge_instance_keys_nothing_to_delete(purge_redis):
+    assert purge_redis.purge_instance_keys(instanceuuid=INSTANCE) == 0
+    assert purge_redis.r.keys('*') == []

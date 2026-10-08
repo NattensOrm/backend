@@ -213,6 +213,43 @@ def purge_creature_keys(creatureuuid: str, instanceuuid: str) -> int:
     return deleted
 
 
+INSTANCE_KEY_PATTERNS = (
+    # Everything scoped by the Instance under the API_ENV prefix: actives of
+    # every bearer (players already purged on leave, mobs, anything else)
+    '{env}:{instance}:*',
+    # The resolver's Instance-scoped keys (no API_ENV prefix), e.g. ammo
+    '{instance}:*',
+    )
+
+
+def purge_instance_keys(instanceuuid: str) -> int:
+    """
+    Deletes every Redis key scoped by an Instance, whoever the bearer is.
+
+    Called once the Instance is closed (last player gone, mobs deleted): a
+    deleted Instance takes its mobs with it, so nothing of it may outlive it
+    (ruling 2026-10-08). Creature-wide keys (PA pools) are not scoped by
+    Instance and are purged per creature, see purge_creature_keys().
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
+
+    :param instanceuuid: The UUID of the closed instance.
+
+    :return: The number of deleted keys.
+    """
+    deleted = 0
+    for pattern in INSTANCE_KEY_PATTERNS:
+        match = pattern.format(env=env_vars['API_ENV'], instance=instanceuuid)
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (instanceuuid:{instanceuuid}, deleted:{deleted})')
+    return deleted
+
+
 def cput(channel: str, msg: dict) -> None:
     """
     Publishes a message (dict) to a specified Redis PubSub channel.
