@@ -89,7 +89,8 @@ def unload(creatureuuid, itemuuid):
     else:
         msg = f'{g.h} Unload Query OK'
         logger.debug(msg)
-        pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
+        # None outside an Instance (no PA): the payload then carries red/blue as None
+        pa = get_pa(creatureuuid=g.Creature.id, tick=tick) or {'red': None, 'blue': None}
         return jsonify(
             {
                 "success": True,

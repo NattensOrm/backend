@@ -196,7 +196,13 @@ def check_creature_pa(red=0, blue=0):
     """ Decorator to check if g.Creature has an amount of PA(red, blue) """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            pa = get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature))
+            tick = instance_tick(g.Creature)
+            if tick is None:
+                # Designer ruling: outside an Instance there are no PA, nothing to check
+                logger.trace(f'[Creature.id:{g.Creature.id}] not in an Instance: no PA check')
+                return func(*args, **kwargs)
+
+            pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
             if pa['blue']['pa'] < blue:
                 msg = f'{g.h} Not enough PA(blue) for this action'
                 return jsonify(

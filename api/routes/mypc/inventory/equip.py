@@ -197,7 +197,8 @@ def equip(creatureuuid, type, slotname, itemuuid):
     # JOB IS DONE
     msg = f'{g.h} Equip Query OK'
     logger.debug(msg)
-    pa = get_pa(creatureuuid=creatureuuid, tick=tick)
+    # None outside an Instance (no PA): the payload then carries red/blue as None
+    pa = get_pa(creatureuuid=creatureuuid, tick=tick) or {'red': None, 'blue': None}
     return jsonify(
         {
             "success": True,
