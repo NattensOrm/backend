@@ -1,6 +1,7 @@
 # -*- coding: utf8 -*-
 
 import requests
+import uuid
 
 from variables import (
     API_ENV,
@@ -10,9 +11,10 @@ from variables import (
     r,
     )
 
-# Designer rulings (2026-10-08): entering an instance gives a Singouin back
-# all its PA, there are no PA outside an instance, and a Singouin may not
-# re-enter an instance it has already left.
+# Designer rulings (2026-10-08): outside an instance nothing of a Singouin
+# exists in Redis (leaving purges PA pools, actives and ammo), so entering an
+# instance starts from nothing by construction (full PA, no actives), and a
+# Singouin may not re-enter an instance it has already left.
 #
 # Start state (after test_11): PJTest is out of any instance, and the PC
 # named 'PJTestInstanceJoin' sits alone in its own instance. End state must
@@ -21,20 +23,23 @@ from variables import (
 BLUE_KEY = f"{API_ENV}:pas:{CREATURE_ID}:blue"
 RED_KEY = f"{API_ENV}:pas:{CREATURE_ID}:red"
 BODY = {"mapid": 1, "hardcore": True, "fast": False, "public": True}
+ACTIVE = {
+    "bearer": CREATURE_ID,
+    "duration_base": 60,
+    "name": 'PyTest',
+    "type": 'effect',
+    }
 
 
-def test_singouins_mypc_instance_create_resets_pa(jwt_header, mypc):
+def test_singouins_mypc_instance_create_starts_full(jwt_header, mypc):
     assert 'instance' not in mypc['indexed'][CREATURE_ID]
-
-    # Simulate spent PA
-    r.set(BLUE_KEY, 'None', ex=9000)
-    r.set(RED_KEY, 'None', ex=5000)
 
     response  = requests.put(f'{API_URL}/mypc/{CREATURE_ID}/instance', headers=jwt_header['access'], json=BODY)  # noqa: E501
     assert response.status_code == 201
     assert response.json().get("success") is True
 
-    # Entering an instance = full PA pools = no keys
+    # No reset on entry: nothing wrote the PA keys since the last leave
+    # (test_10 deletes them), so the pools are full by construction
     assert r.exists(BLUE_KEY) == 0
     assert r.exists(RED_KEY) == 0
 
@@ -62,20 +67,33 @@ def test_singouins_mypc_instance_double_entry_refused(jwt_header, mypc):
     assert 'already in Instance' in response.json().get("msg")
 
 
-def test_singouins_mypc_instance_leave_resets_pa(jwt_header, mypc):
+def test_singouins_mypc_instance_leave_purges_everything(jwt_header, mypc):
     instance_id = mypc['indexed'][CREATURE_ID]['instance']
+    other_id = str(uuid.uuid4())
+    other_key = f"{API_ENV}:{instance_id}:effects:{other_id}:PyTest"
 
-    # Simulate spent PA
+    # Simulate spent PA, actives, and the resolver's ammo key
     r.set(BLUE_KEY, 'None', ex=9000)
+    for actives_type in ('effects', 'statuses', 'cds'):
+        key = f"{API_ENV}:{instance_id}:{actives_type}:{CREATURE_ID}:PyTest"
+        r.hset(key, mapping=ACTIVE)
+        r.expire(key, 9000)
+    r.set(f"{instance_id}:ammo:{CREATURE_ID}", 10)
+    # Another creature's active in the same instance must survive
+    r.hset(other_key, mapping=ACTIVE)
+    r.expire(other_key, 9000)
 
     # PJTest is alone in its instance: leaving deletes it
     response = requests.post(f"{API_URL}/mypc/{CREATURE_ID}/instance/{instance_id}/leave", headers=jwt_header['access'])  # noqa: E501
     assert response.status_code == 200
     assert response.json().get("success") is True
 
-    # Outside an instance there are no PA
-    assert r.exists(BLUE_KEY) == 0
-    assert r.exists(RED_KEY) == 0
+    # Outside an instance nothing of the creature exists in Redis
+    assert r.keys(f"{API_ENV}:pas:{CREATURE_ID}:*") == []
+    assert r.keys(f"{API_ENV}:{instance_id}:*:{CREATURE_ID}:*") == []
+    assert r.keys(f"{instance_id}:ammo:{CREATURE_ID}") == []
+    assert r.exists(other_key) == 1
+    r.delete(other_key)
 
     response = requests.get(f'{API_URL}/mypc', headers=jwt_header['access'])
     assert response.status_code == 200
