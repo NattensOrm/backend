@@ -10,6 +10,7 @@ from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Item import ItemDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.models.Skill import SkillDocument
 
 from utils.decorators import check_creature_exists
 from utils.redis import r
@@ -52,6 +53,11 @@ def mypc_del(creatureuuid):
             logger.debug(f'{g.h} ProfessionDocument deletion >>')
             ProfessionDocument.objects(_id=g.Creature.id).get().delete()
             logger.debug(f'{g.h} ProfessionDocument deletion OK')
+        # SkillDocument
+        if SkillDocument.objects(_id=g.Creature.id):
+            logger.debug(f'{g.h} SkillDocument deletion >>')
+            SkillDocument.objects(_id=g.Creature.id).get().delete()
+            logger.debug(f'{g.h} SkillDocument deletion OK')
         # CosmeticDocument
         if CosmeticDocument.objects(bearer=g.Creature.id):
             try:
