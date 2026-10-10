@@ -13,7 +13,7 @@ from mongo.models.Korp import KorpDocument
 from mongo.models.Squad import SquadDocument
 from mongo.models.User import UserDocument
 
-from utils.pa import instance_tick, pa_cost_split
+from utils.pa import instance_tick, pa_shortfall_colour
 from utils.redis import consume_pa, get_pa
 
 
@@ -131,9 +131,8 @@ def pa(red=0, blue=0, consume=False):
 
             pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
             # Designer ruling Q104: red PA cover a blue shortfall
-            if pa_cost_split(pa['red']['pa'], pa['blue']['pa'], red, blue) is None:
-                # Own red cost not met -> red, otherwise the uncovered blue shortfall -> blue
-                color = 'red' if pa['red']['pa'] < red else 'blue'
+            color = pa_shortfall_colour(pa['red']['pa'], pa['blue']['pa'], red, blue)
+            if color is not None:
                 return jsonify({
                     "success": False,
                     "msg": f"{g.h} Not enough PA({color}) for this action",
