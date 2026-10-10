@@ -4,7 +4,7 @@ import os
 import sys
 import urllib.parse
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mongoengine import connect
@@ -352,6 +352,48 @@ def make_squad():
         data.update(overrides)
         return SquadDocument(**data).save()
     return _make_squad
+
+
+@pytest.fixture
+def resolver_eats():
+    """Mimic the fight resolver eating a banana: a raw, atomic `$inc -1` on
+    satchels.currency.banana, written straight through pymongo (not through
+    SatchelDocument.objects, so tests can patch that manager freely).
+
+    Used to inject a concurrent write between the bot's read and its write,
+    which is exactly where a read-modify-write would lose it.
+    """
+    def _resolver_eats(satchel_id):
+        # UUIDField(binary=False): the _id is stored as a string
+        result = SatchelDocument._get_collection().update_one(
+            {'_id': str(satchel_id), 'currency.banana': {'$gte': 1}},
+            {'$inc': {'currency.banana': -1}},
+            )
+        # Fail loudly rather than let a test pass without its concurrent write
+        assert result.modified_count == 1, f'resolver_eats did not apply on {satchel_id}'
+    return _resolver_eats
+
+
+@pytest.fixture
+def hook_query():
+    """Run `hook()` right before the n-th (1-based) `document.objects(...)`
+    call made while the returned patch is active; every call is delegated to
+    the real manager.
+
+    Lets a test slip a concurrent write (e.g. resolver_eats) between the
+    command's own reads and its writes, without touching the command code.
+    """
+    def _hook_query(document, hook, *, before_call=1):
+        real_objects = document.objects
+        calls = []
+
+        def _objects(*args, **kwargs):
+            calls.append(True)
+            if len(calls) == before_call:
+                hook()
+            return real_objects(*args, **kwargs)
+        return patch.object(document, 'objects', MagicMock(side_effect=_objects))
+    return _hook_query
 
 
 @pytest.fixture
