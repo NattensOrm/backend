@@ -66,9 +66,22 @@ def ammo(group_bazaar, bot):
             embed_desc = f"> {item_emoji} 10x **{caliber.capitalize()}**"
 
             item_price_total = int(item_price * 10)
+            # The caliber is a dynamic field name (already validated against
+            # AMMUNITIONS above), so the mongoengine kwargs are built as dicts.
+            # Each trade is one guarded atomic update: the guard is the
+            # authority, a result of 0 means the trade was refused.
             if action_type == 'Sell':
-                current_ammo = getattr(Satchel.ammo, caliber, 0)
-                if current_ammo < 10:
+                updated = SatchelDocument.objects(
+                    _id=singouin_uuid,
+                    **{f'ammo__{caliber}__gte': 10},
+                    ).update_one(
+                        inc__currency__banana=item_price_total,
+                        set__updated=datetime.datetime.utcnow(),
+                        **{f'dec__ammo__{caliber}': 10},
+                        )
+                if updated == 0:
+                    Satchel.reload()
+                    current_ammo = getattr(Satchel.ammo, caliber, 0)
                     msg = f'Not enough {caliber.capitalize()} in stock (have {current_ammo}, need 10)'  # noqa: E501
                     await ctx.respond(
                         embed=discord.Embed(
@@ -79,14 +92,19 @@ def ammo(group_bazaar, bot):
                         )
                     logger.info(f'{h} └──> Bazaar-Sell Query KO ({msg})')
                     return
-                # We do the financial transaction
-                Satchel.currency.banana += item_price_total
-                # We update the Ammunition count
-                setattr(Satchel.ammo, caliber, current_ammo - 10)
                 embed_title = 'Sold to the Bazaar:'
 
             elif action_type == 'Buy':
-                if Satchel.currency.banana < item_price_total:
+                updated = SatchelDocument.objects(
+                    _id=singouin_uuid,
+                    currency__banana__gte=item_price_total,
+                    ).update_one(
+                        dec__currency__banana=item_price_total,
+                        set__updated=datetime.datetime.utcnow(),
+                        **{f'inc__ammo__{caliber}': 10},
+                        )
+                if updated == 0:
+                    Satchel.reload()
                     msg = f'Not enough bananas (have {Satchel.currency.banana}, need {item_price_total})'  # noqa: E501
                     await ctx.respond(
                         embed=discord.Embed(
@@ -97,14 +115,10 @@ def ammo(group_bazaar, bot):
                         )
                     logger.info(f'{h} └──> Bazaar-Sell Query KO ({msg})')
                     return
-                # We do the financial transaction
-                Satchel.currency.banana -= item_price_total
-                # We update the Ammunition count
-                setattr(Satchel.ammo, caliber, getattr(Satchel.ammo, caliber, 0) + 10)
                 embed_title = 'Bought from the Bazaar:'
 
-            Satchel.updated = datetime.datetime.utcnow()
-            Satchel.save()
+            # Fresh balance for the embed footer
+            Satchel.reload()
         except Exception as e:
             description = f'Bazaar-Sell Query KO [{e}]'
             logger.error(f'{h} └──> {description}')
