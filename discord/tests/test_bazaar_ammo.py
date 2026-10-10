@@ -186,3 +186,51 @@ async def test_buy_guard_refuses_when_balance_drops_after_the_read(bot, make_ctx
     satchel.reload()
     assert satchel.currency.banana == 9
     assert satchel.ammo.cal50 == 0
+
+
+def _raise_injected_failure():
+    raise RuntimeError('injected failure on a 3rd SatchelDocument.objects() call')
+
+
+async def test_buy_never_debits_without_adding_ammo(bot, make_ctx, get_callback, make_satchel, hook_query):  # noqa: E501
+    # Failure injection: the atomic buy makes exactly 2 objects() calls (read,
+    # then one update). A split implementation (guarded debit, then a separate
+    # ammo update) would make a 3rd one; failing it must not leave the debit
+    # applied without the ammo. Bananas and ammo change together or not at all.
+    singouin_id = uuid.uuid4()
+    satchel = make_satchel(_id=singouin_id, ammo={'cal50': 0}, currency={'banana': 25})
+
+    group = bot.create_group(name='bazaar', description='test')
+    ammo_command(group, bot)
+    callback = get_callback(group, 'ammo')
+
+    ctx = make_ctx()
+    with hook_query(SatchelDocument, _raise_injected_failure, before_call=3, must_fire=False):  # noqa: E501
+        await callback(ctx, str(singouin_id), 'Buy', 'cal50')
+
+    satchel.reload()
+    # cal50: price 1/unit * 10 units == 10
+    assert (satchel.currency.banana, satchel.ammo.cal50) in [(25, 0), (15, 10)]
+    # Against the atomic code the trade goes through
+    assert (satchel.currency.banana, satchel.ammo.cal50) == (15, 10)
+
+
+async def test_sell_never_removes_ammo_without_crediting(bot, make_ctx, get_callback, make_satchel, hook_query):  # noqa: E501
+    # Same failure injection as above, for the sell side: a split guarded ammo
+    # debit followed by a separate banana credit would be cut in half.
+    singouin_id = uuid.uuid4()
+    satchel = make_satchel(_id=singouin_id, ammo={'cal50': 20}, currency={'banana': 5})
+
+    group = bot.create_group(name='bazaar', description='test')
+    ammo_command(group, bot)
+    callback = get_callback(group, 'ammo')
+
+    ctx = make_ctx()
+    with hook_query(SatchelDocument, _raise_injected_failure, before_call=3, must_fire=False):  # noqa: E501
+        await callback(ctx, str(singouin_id), 'Sell', 'cal50')
+
+    satchel.reload()
+    # cal50: price 1/unit * 10 units == 10
+    assert (satchel.currency.banana, satchel.ammo.cal50) in [(5, 20), (15, 10)]
+    # Against the atomic code the trade goes through
+    assert (satchel.currency.banana, satchel.ammo.cal50) == (15, 10)

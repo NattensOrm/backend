@@ -3,6 +3,7 @@
 import uuid
 
 from mongo.models.Item import ItemDocument
+from mongo.models.Satchel import SatchelDocument
 from subcommands.bazaar.item import item as item_command
 
 
@@ -73,3 +74,34 @@ async def test_sell_keeps_a_concurrent_resolver_decrement(bot, make_ctx, get_cal
     # The footer shows the persisted balance, not a stale computed one
     embed = ctx.respond.call_args.kwargs['embed']
     assert embed.footer.text == f'Account balance: {5 - 1 + 12} 🍌'
+
+
+async def test_sell_with_satchel_gone_before_credit_is_ko_and_keeps_the_item(bot, make_ctx, get_callback, make_satchel, make_highscore, make_item, hook_query):  # noqa: E501
+    # The satchel exists when it is read, then disappears before the credit:
+    # the atomic credit matches nothing (credited == 0), which must go to the
+    # KO path before the item is shelved, not silently "succeed".
+    singouin_id = uuid.uuid4()
+    make_satchel(_id=singouin_id)
+    highscore = make_highscore(_id=singouin_id)
+    itm = make_item(bearer=singouin_id, metatype='armor', metaid=1, rarity='Rare')
+
+    def _satchel_vanishes():
+        # Raw delete, so the patched SatchelDocument manager is not involved
+        SatchelDocument._get_collection().delete_one({'_id': str(singouin_id)})
+
+    group = bot.create_group(name='bazaar', description='test')
+    item_command(group, bot)
+    callback = get_callback(group, 'item')
+
+    ctx = make_ctx()
+    with hook_query(ItemDocument, _satchel_vanishes):
+        await callback(ctx, str(singouin_id), 'Sell', str(itm.id))
+
+    assert ctx.respond.call_count == 1
+    embed = ctx.respond.call_args.kwargs['embed']
+    assert embed.description.startswith('Bazaar-Sell Query KO')
+    assert SatchelDocument.objects(_id=singouin_id).count() == 0
+    itm.reload()
+    assert itm.bearer == singouin_id  # not shelved
+    highscore.reload()
+    assert highscore.internal.item.sold == 0

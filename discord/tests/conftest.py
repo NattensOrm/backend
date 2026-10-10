@@ -4,6 +4,7 @@ import os
 import sys
 import urllib.parse
 import uuid
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -377,13 +378,18 @@ def resolver_eats():
 @pytest.fixture
 def hook_query():
     """Run `hook()` right before the n-th (1-based) `document.objects(...)`
-    call made while the returned patch is active; every call is delegated to
-    the real manager.
+    call made inside the returned context manager; every call is delegated
+    to the real manager.
 
     Lets a test slip a concurrent write (e.g. resolver_eats) between the
     command's own reads and its writes, without touching the command code.
+
+    On a clean exit it asserts that the hook fired, so a test cannot pass
+    without its concurrent write. Failure-injection tests whose hook must
+    NOT fire against the correct code pass `must_fire=False`.
     """
-    def _hook_query(document, hook, *, before_call=1):
+    @contextmanager
+    def _hook_query(document, hook, *, before_call=1, must_fire=True):
         real_objects = document.objects
         calls = []
 
@@ -392,7 +398,13 @@ def hook_query():
             if len(calls) == before_call:
                 hook()
             return real_objects(*args, **kwargs)
-        return patch.object(document, 'objects', MagicMock(side_effect=_objects))
+        with patch.object(document, 'objects', MagicMock(side_effect=_objects)):
+            yield
+        if must_fire:
+            assert len(calls) >= before_call, (
+                f'hook_query: {document.__name__}.objects() called {len(calls)} time(s), '
+                f'the hook was due before call {before_call} and never fired'
+                )
     return _hook_query
 
 
