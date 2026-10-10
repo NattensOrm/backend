@@ -65,8 +65,8 @@ jobs:
         ports:
           - 27017:27017
         env:
-          MONGO_INITDB_ROOT_USERNAME: ${{ vars.MONGO_USER }}
-          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ vars.MONGO_USER || 'singouins' }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS || 'ci-throwaway-pass' }}
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s
@@ -102,11 +102,11 @@ jobs:
 
     - name: Test with PyTest ⚙️
       env:
-          LOGURU_LEVEL: ${{ vars.LOGURU_LEVEL }}
+          LOGURU_LEVEL: ${{ vars.LOGURU_LEVEL || 'INFO' }}
 
-          MONGO_HOST: ${{ vars.MONGO_HOST }}
-          MONGO_USER: ${{ vars.MONGO_USER }}
-          MONGO_PASS: ${{ secrets.MONGO_PASS }}
+          MONGO_HOST: ${{ vars.MONGO_HOST || '127.0.0.1' }}
+          MONGO_USER: ${{ vars.MONGO_USER || 'singouins' }}
+          MONGO_PASS: ${{ secrets.MONGO_PASS || 'ci-throwaway-pass' }}
       run: |
         echo "--- Starting PyTest"
         pytest mongo
@@ -145,8 +145,8 @@ jobs:
         ports:
           - 27017:27017
         env:
-          MONGO_INITDB_ROOT_USERNAME: ${{ vars.MONGO_USER }}
-          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ vars.MONGO_USER || 'singouins' }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_PASS || 'ci-throwaway-pass' }}
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s
@@ -197,15 +197,15 @@ jobs:
 
     - name: Test with PyTest ⚙️
       env:
-          LOGURU_LEVEL: ${{ vars.LOGURU_LEVEL }}
-          GUNICORN_CHDIR: ${{ vars.GUNICORN_CHDIR }}
+          LOGURU_LEVEL: ${{ vars.LOGURU_LEVEL || 'INFO' }}
+          GUNICORN_CHDIR: ${{ vars.GUNICORN_CHDIR || github.workspace }}
 
-          SEP_SECRET_KEY: ${{ secrets.SEP_SECRET_KEY }}
-          API_ENV: ${{ vars.API_ENV }}
+          SEP_SECRET_KEY: ${{ secrets.SEP_SECRET_KEY || 'ci-throwaway-jwt-key' }}
+          API_ENV: ${{ vars.API_ENV || 'CI' }}
 
-          MONGO_HOST: ${{ vars.MONGO_HOST }}
-          MONGO_USER: ${{ vars.MONGO_USER }}
-          MONGO_PASS: ${{ secrets.MONGO_PASS }}
+          MONGO_HOST: ${{ vars.MONGO_HOST || '127.0.0.1' }}
+          MONGO_USER: ${{ vars.MONGO_USER || 'singouins' }}
+          MONGO_PASS: ${{ secrets.MONGO_PASS || 'ci-throwaway-pass' }}
 
           # CI must never send real mails: auth's SMTP points to the Mailpit
           # service, which catches them (any credentials are accepted)
