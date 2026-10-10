@@ -173,3 +173,49 @@ async def test_interaction_check_allows_the_original_author(bot, make_ctx, make_
 
     assert allowed is True
     assert own_interaction.response.send_message.call_count == 0
+
+
+async def test_buy_guard_refuses_when_balance_drops_after_the_check(bot, make_ctx, make_interaction, make_creature, make_satchel, make_highscore, make_item, make_auction, redis_stub, resolver_eats, hook_query):  # noqa: E501
+    # The buyer has exactly the price when the satchels are read, so the
+    # pre-check passes; the resolver eats a banana right after (before the
+    # Highscore reads), so only the atomic guarded debit can refuse the buy.
+    state = await _setup_trade(make_creature, make_satchel, make_highscore, make_item, make_auction, buyer_banana=20, price=20)  # noqa: E501
+
+    ctx = make_ctx()
+    view = buyView(ctx, str(state['buyer'].id), str(state['auction'].id))
+    interaction = make_interaction(user=ctx.author)
+
+    with hook_query(HighscoreDocument, lambda: resolver_eats(state['buyer'].id)):
+        await view.ok_button_callback.callback(interaction)
+
+    assert interaction.response.edit_message.call_count == 1
+    embed = interaction.response.edit_message.call_args.kwargs['embed']
+    assert 'Not enough money' in embed.description
+    # Refused before anything was changed: the auction is still there
+    assert AuctionDocument.objects(_id=state['auction'].id).count() == 1
+    state['buyer_satchel'].reload()
+    state['seller_satchel'].reload()
+    assert state['buyer_satchel'].currency.banana == 19  # only the resolver's -1
+    assert state['seller_satchel'].currency.banana == 0
+    state['item'].reload()
+    assert state['item'].auctioned is True
+    assert state['item'].bearer == state['seller'].id
+
+
+async def test_buy_keeps_a_concurrent_resolver_decrement(bot, make_ctx, make_interaction, make_creature, make_satchel, make_highscore, make_item, make_auction, redis_stub, resolver_eats, hook_query):  # noqa: E501
+    # Lost-update shape: the resolver's $inc -1 lands between the bot's read
+    # of the buyer satchel and its write. The debit must not overwrite it.
+    state = await _setup_trade(make_creature, make_satchel, make_highscore, make_item, make_auction, buyer_banana=100, price=20)  # noqa: E501
+
+    ctx = make_ctx()
+    view = buyView(ctx, str(state['buyer'].id), str(state['auction'].id))
+    interaction = make_interaction(user=ctx.author)
+
+    with hook_query(HighscoreDocument, lambda: resolver_eats(state['buyer'].id)):
+        await view.ok_button_callback.callback(interaction)
+
+    assert AuctionDocument.objects(_id=state['auction'].id).count() == 0
+    state['buyer_satchel'].reload()
+    state['seller_satchel'].reload()
+    assert state['buyer_satchel'].currency.banana == 100 - 1 - 20
+    assert state['seller_satchel'].currency.banana == 20
