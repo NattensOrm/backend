@@ -11,8 +11,10 @@ from typing import Optional
 from utils.pa import (
     BLUE_PA_MAX,
     RED_PA_MAX,
+    pa_cost_split,
     pa_durations,
     pa_from_ttl,
+    pa_spend_split,
     ttl_after_spend,
     )
 from variables import env_vars
@@ -140,9 +142,14 @@ def consume_pa(
     """
     Consumes a specified number of blue and/or red PAs for a Creature.
 
+    Designer ruling Q104 ("red PA pay for everything"): the blue cost is spent
+    from the blue pool as far as it goes, the shortfall is spent from the red
+    pool on top of the red cost (see utils.pa.pa_cost_split()).
+
     :param creatureuuid: The UUID of the creature.
-    :param redpa: The number of red PAs to consume (default is 0).
-    :param bluepa: The number of blue PAs to consume (default is 0).
+    :param redpa: The red PA cost of the action (default is 0).
+    :param bluepa: The blue PA cost of the action (default is 0),
+                   red PA cover what the blue pool lacks.
     :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
                  Each red PA spent costs one tick of TTL, each blue PA two ticks.
                  Mandatory: pass None explicitly when the Creature is not in an Instance,
@@ -158,6 +165,22 @@ def consume_pa(
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
         "red": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red"),
     }
+
+    # Designer ruling Q104: blue is spent first, red covers the blue shortfall
+    available = {
+        "blue": pa_from_ttl(ttls['blue'], BLUE_PA_MAX, durations['blue'])['pa'],
+        "red": pa_from_ttl(ttls['red'], RED_PA_MAX, durations['red'])['pa'],
+    }
+    split = pa_cost_split(available['red'], available['blue'], redpa, bluepa)
+    if split is None:
+        # The pools changed between the check and now (concurrent request):
+        # spend anyway with the same formula, never raise mid-action
+        split = pa_spend_split(available['blue'], redpa, bluepa)
+        logger.warning(
+            f'[Creature.id:{creatureuuid}] PA(red:{redpa}, blue:{bluepa}) unaffordable at consume '
+            f'(available red:{available["red"]}, blue:{available["blue"]}): spending anyway'
+            )
+    redpa, bluepa = split['red'], split['blue']
 
     if bluepa > 0:
         logger.trace(f'Consuming PA (blue:{bluepa})')

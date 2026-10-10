@@ -16,8 +16,10 @@ sys.path.append(LOCAL_PATH)
 from utils.pa import (  # noqa: E402
     BLUE_PA_MAX,
     RED_PA_MAX,
+    pa_cost_split,
     pa_durations,
     pa_from_ttl,
+    pa_spend_split,
     ttl_after_spend,
     )
 
@@ -77,6 +79,59 @@ def test_ttl_after_spend_from_absent_key():
 def test_ttl_after_spend_from_existing_ttl():
     assert ttl_after_spend(5000, 1, 3600) == 8600
     assert ttl_after_spend(170, 2, 60) == 290
+
+
+#
+# Red covers blue (designer ruling Q104, pure)
+#
+def test_pa_cost_split_enough_blue_uses_no_red():
+    assert pa_cost_split(16, 8, 0, 2) == {'red': 0, 'blue': 2}
+    assert pa_cost_split(16, 8, 1, 2) == {'red': 1, 'blue': 2}
+
+
+def test_pa_cost_split_shortfall_covered_by_red():
+    """ 1 blue left for a 3 blue action: 2 red cover the shortfall. """
+    assert pa_cost_split(16, 1, 0, 3) == {'red': 2, 'blue': 1}
+
+
+def test_pa_cost_split_shortfall_added_to_own_red_cost():
+    """ 2 red + 3 blue action with 1 blue left: 2 + 2 red, 1 blue. """
+    assert pa_cost_split(16, 1, 2, 3) == {'red': 4, 'blue': 1}
+
+
+def test_pa_cost_split_blue_empty_all_in_red():
+    assert pa_cost_split(16, 0, 1, 2) == {'red': 3, 'blue': 0}
+
+
+def test_pa_cost_split_not_covered_is_none():
+    assert pa_cost_split(2, 1, 2, 3) is None
+    assert pa_cost_split(0, 0, 0, 1) is None
+    # Own red cost not met, even with blue to spare
+    assert pa_cost_split(1, 8, 2, 0) is None
+
+
+def test_pa_cost_split_exact_boundary():
+    """ Red available exactly equals the own red cost plus the shortfall. """
+    assert pa_cost_split(4, 1, 2, 3) == {'red': 4, 'blue': 1}
+    assert pa_cost_split(3, 1, 2, 3) is None
+    assert pa_cost_split(0, 2, 0, 2) == {'red': 0, 'blue': 2}
+
+
+def test_pa_cost_split_zero_costs():
+    assert pa_cost_split(0, 0, 0, 0) == {'red': 0, 'blue': 0}
+    assert pa_cost_split(16, 8, 0, 0) == {'red': 0, 'blue': 0}
+
+
+def test_pa_cost_split_negative_availability_counts_as_zero():
+    assert pa_cost_split(16, -3, 0, 2) == {'red': 2, 'blue': 0}
+    assert pa_cost_split(-1, 8, 0, 0) == {'red': 0, 'blue': 0}
+    assert pa_cost_split(-1, 8, 1, 0) is None
+
+
+def test_pa_spend_split_has_no_affordability_gate():
+    """ Same formula as pa_cost_split(), used by consume_pa() on a check/consume race. """
+    assert pa_spend_split(1, 2, 3) == {'red': 4, 'blue': 1}
+    assert pa_spend_split(-3, 0, 2) == {'red': 2, 'blue': 0}
 
 
 #
@@ -162,6 +217,47 @@ def test_tick_is_keyword_only_and_mandatory(pa_redis):
         pa_redis.get_pa(creatureuuid=CREATURE_ID)
     with pytest.raises(TypeError):
         pa_redis.consume_pa(creatureuuid=CREATURE_ID, bluepa=1)
+
+
+#
+# Red covers blue in consume_pa() (designer ruling Q104, fakeredis)
+#
+def test_consume_pa_blue_shortfall_moves_to_red(pa_redis):
+    """
+    7 blue spent first (1 left), then a 1 red + 3 blue action: blue spends
+    its last PA, the 2 missing blue land on the red pool on top of its own 1.
+    """
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, bluepa=7, tick=3600)
+    assert pa_redis.get_pa(creatureuuid=CREATURE_ID, tick=3600)['blue']['pa'] == 1
+
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, redpa=1, bluepa=3, tick=3600)
+
+    # Blue pool spent only what it had: 8 * 7200
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:blue') == 8 * 7200
+    # Red pool: own cost 1 + shortfall 2, at the red duration
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:red') == 3 * 3600
+
+    pa = pa_redis.get_pa(creatureuuid=CREATURE_ID, tick=3600)
+    assert pa['blue']['pa'] == 0
+    assert pa['red']['pa'] == 13
+
+
+def test_consume_pa_blue_empty_all_in_red_fast_tick(pa_redis):
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, bluepa=8, tick=60)
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, bluepa=2, tick=60)
+
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:blue') == 8 * 120
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:red') == 2 * 60
+
+
+def test_consume_pa_unaffordable_spends_anyway_without_raising(pa_redis):
+    """ Check/consume race: never raise, same formula, red may go below zero. """
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, redpa=15, bluepa=8, tick=3600)
+
+    pa_redis.consume_pa(creatureuuid=CREATURE_ID, redpa=1, bluepa=1, tick=3600)
+
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:blue') == 8 * 7200
+    assert pa_redis.r.ttl(f'pytest:pas:{CREATURE_ID}:red') == 17 * 3600
 
 
 @pytest.fixture

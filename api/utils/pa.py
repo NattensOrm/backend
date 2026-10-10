@@ -68,6 +68,59 @@ def ttl_after_spend(ttl: int, spent: int, duration: int) -> int:
     return max(ttl, 0) + spent * duration
 
 
+def pa_cost_split(
+    red_available: int,
+    blue_available: int,
+    red_cost: int,
+    blue_cost: int,
+) -> Optional[dict]:
+    """
+    Splits the PA cost of an action between the red and blue pools.
+
+    Designer ruling Q104 ("red PA pay for everything"): when an action costs
+    blue PA and the Creature lacks blue, red PA cover the shortfall, 1 red per
+    missing blue. Blue is spent first, the shortfall is added to the action's
+    own red cost.
+
+    :param red_available: Red PA available right now (negative counts as 0).
+    :param blue_available: Blue PA available right now (negative counts as 0).
+    :param red_cost: Red PA cost of the action.
+    :param blue_cost: Blue PA cost of the action.
+
+    :return: {'red': red PA to spend, 'blue': blue PA to spend},
+             or None when the red pool cannot cover its share.
+    """
+    split = pa_spend_split(blue_available, red_cost, blue_cost)
+
+    if max(red_available, 0) < split['red']:
+        return None
+
+    return split
+
+
+def pa_spend_split(blue_available: int, red_cost: int, blue_cost: int) -> dict:
+    """
+    The pa_cost_split() formula without the affordability gate: blue spent
+    first, the blue shortfall added to the red cost.
+
+    Used by consume_pa() when the pools changed between the check and the
+    consumption: the PA are still spent deterministically, never raised.
+
+    :param blue_available: Blue PA available right now (negative counts as 0).
+    :param red_cost: Red PA cost of the action.
+    :param blue_cost: Blue PA cost of the action.
+
+    :return: {'red': red PA to spend, 'blue': blue PA to spend}
+    """
+    blue_spent = min(blue_cost, max(blue_available, 0))
+    shortfall = blue_cost - blue_spent
+
+    return {
+        'red': red_cost + shortfall,
+        'blue': blue_spent,
+    }
+
+
 def instance_tick(creature) -> Optional[int]:
     """
     Tick of the Instance the Creature is in, or None when it is in none
