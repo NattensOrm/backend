@@ -98,6 +98,32 @@ def pa_cost_split(
     return split
 
 
+def pa_shortfall_colour(
+    red_available: int,
+    blue_available: int,
+    red_cost: int,
+    blue_cost: int,
+) -> Optional[str]:
+    """
+    Colour to report when an action is refused for lack of PA.
+
+    'red' when the action's own red cost is not met, 'blue' when the blue
+    shortfall cannot be covered by red (designer ruling Q104), None when the
+    action is affordable (see pa_cost_split()).
+
+    :param red_available: Red PA available right now (negative counts as 0).
+    :param blue_available: Blue PA available right now (negative counts as 0).
+    :param red_cost: Red PA cost of the action.
+    :param blue_cost: Blue PA cost of the action.
+
+    :return: 'red', 'blue', or None when affordable.
+    """
+    if pa_cost_split(red_available, blue_available, red_cost, blue_cost) is not None:
+        return None
+
+    return 'red' if max(red_available, 0) < red_cost else 'blue'
+
+
 def pa_spend_split(blue_available: int, red_cost: int, blue_cost: int) -> dict:
     """
     The pa_cost_split() formula without the affordability gate: blue spent
