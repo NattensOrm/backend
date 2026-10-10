@@ -125,9 +125,6 @@ jobs:
     needs:
     - mongo-pytest
 
-    environment:
-      name: api
-
     services:
       # Start Redis 🛢️
       redis:
