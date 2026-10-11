@@ -1897,6 +1897,9 @@ components:
         arrow:
           type: integer
           nullable: false
+        axe:
+          type: integer
+          nullable: false
         bolt:
           type: integer
           nullable: false
@@ -1913,6 +1916,12 @@ components:
           type: integer
           nullable: false
         cal55:
+          type: integer
+          nullable: false
+        cocktail:
+          type: integer
+          nullable: false
+        knife:
           type: integer
           nullable: false
         shell:
