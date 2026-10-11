@@ -40,7 +40,7 @@ from mongo.models.Satchel import (
 )
 
 from utils.decorators import check_is_json, check_user_exists
-from variables import metaIndexed, metaNames
+from variables import metaIndexed
 
 
 class CosmeticDataSchema(BaseModel):
@@ -117,7 +117,7 @@ def mypc_add():
     }
 
     # We grab the race wanted from metaRaces
-    metaRace = metaNames['race'][Singouin.race]
+    metaRace = metaIndexed['race'].get(Singouin.race)
     if metaRace is None:
         msg = f'{g.h} MetaRace not found (race:{Singouin.race})'
         logger.warning(msg)
