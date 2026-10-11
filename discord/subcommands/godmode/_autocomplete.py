@@ -118,7 +118,7 @@ async def get_singouins_in_instance_list(ctx: discord.AutocompleteContext):
 
 async def get_singouins_list(ctx: discord.AutocompleteContext):
     try:
-        query = Q(race__gt=1) & Q(race__lt=4)
+        query = Q(race__gte=1) & Q(race__lte=4)
         Creatures = CreatureDocument.objects(query)
     except Exception as e:
         logger.error(f'MongoDB Query KO [{e}]')

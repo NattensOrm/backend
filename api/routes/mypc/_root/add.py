@@ -5,7 +5,8 @@ import uuid
 from flask import g, jsonify, request
 from flask_jwt_extended import jwt_required
 from loguru import logger
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
+from pydantic_core import PydanticCustomError
 from typing import Optional
 
 from mongo.models.Cosmetic import (
@@ -64,6 +65,24 @@ class EquipmentSchema(BaseModel):
     lefthand: EquipmentItemSchema
 
 
+# Ruling (card "character creation accepts any race and vocation"): a player
+# can only create one of the four playable races. Races 5..10 are reserved
+# (all-0 stats) and 11..16 are mob races. No meta flags a race as playable,
+# hence this named constant.
+PLAYABLE_RACES = range(1, 5)
+
+# Vocation -> starting specialisation points. Also the source of truth for
+# which vocations exist: POST /mypc refuses any vocation not listed here.
+VOCATION_SPECS = {
+    1: {'spec_b':  0, 'spec_g':  0, 'spec_m': 10, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0},
+    2: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r': 10, 'spec_v':  0},
+    3: {'spec_b':  0, 'spec_g': 10, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0},
+    4: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v': 10},
+    5: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p': 10, 'spec_r':  0, 'spec_v':  0},
+    6: {'spec_b': 10, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0},
+}
+
+
 class AddSingouinSchema(BaseModel):
     vocation: int
     gender: bool
@@ -71,6 +90,32 @@ class AddSingouinSchema(BaseModel):
     race: int
     cosmetic: CosmeticSchema  # Nested model
     equipment: EquipmentSchema  # Nested model
+
+    # PydanticCustomError keeps the error context JSON-serialisable, so the
+    # route can return e.errors() as the 400 payload unchanged.
+    @field_validator('race')
+    @classmethod
+    def race_must_be_playable(cls, value: int) -> int:
+        if value not in PLAYABLE_RACES:
+            first, last = PLAYABLE_RACES[0], PLAYABLE_RACES[-1]
+            raise PydanticCustomError(
+                'race_not_playable',
+                f'race must be {first}..{last} (got {{race}})',
+                {'race': value},
+            )
+        return value
+
+    @field_validator('vocation')
+    @classmethod
+    def vocation_must_exist(cls, value: int) -> int:
+        if value not in VOCATION_SPECS:
+            known = ', '.join(str(vocation) for vocation in VOCATION_SPECS)
+            raise PydanticCustomError(
+                'vocation_unknown',
+                f'unknown vocation {{vocation}} (expected one of {known})',
+                {'vocation': value},
+            )
+        return value
 
 
 #
@@ -106,15 +151,8 @@ def mypc_add():
             }
         ), 200
 
-    # Define the mapping of classes to their specifications
-    specs = {
-        1: {'spec_b':  0, 'spec_g':  0, 'spec_m': 10, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0},
-        2: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r': 10, 'spec_v':  0},
-        3: {'spec_b':  0, 'spec_g': 10, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0},
-        4: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v': 10},
-        5: {'spec_b':  0, 'spec_g':  0, 'spec_m':  0, 'spec_p': 10, 'spec_r':  0, 'spec_v':  0},
-        6: {'spec_b': 10, 'spec_g':  0, 'spec_m':  0, 'spec_p':  0, 'spec_r':  0, 'spec_v':  0}
-    }
+    # Vocation -> specialisation mapping (vocation already validated by the schema)
+    specs = VOCATION_SPECS
 
     # We grab the race wanted from metaRaces
     metaRace = metaNames['race'][Singouin.race]
