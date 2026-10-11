@@ -92,6 +92,8 @@ def grant(group_user, bot):
                     )
                 return
 
+        # Squad/Korp roles not found in the guild, reported in the final answer
+        missing_roles = []
         for Creature in Creatures:
             # Korp management
             # A Pending invitee is not a member yet: no role until it accepts
@@ -100,12 +102,12 @@ def grant(group_user, bot):
                 try:
                     korprole = discord.utils.get(
                         guild.roles,
-                        name=f"Korp-{Creature.korp}"
+                        name=f"Korp-{Creature.korp.id}"
                         )
                 except Exception as e:
                     await ctx.respond(
                         embed=discord.Embed(
-                            description=f"Discord get-role:Korp-{Creature.korp} KO\n[{e}]",
+                            description=f"Discord get-role:Korp-{Creature.korp.id} KO\n[{e}]",
                             colour=discord.Colour.red(),
                             ),
                         ephemeral=True,
@@ -113,12 +115,16 @@ def grant(group_user, bot):
                     return
                 # Add the Korp role to the user
                 try:
-                    if korprole not in ctx.author.roles:
+                    if korprole is None:
+                        # Role not created yet (subtasks/channels.py): skip it
+                        missing_roles.append(f"Korp-{Creature.korp.id}")
+                        logger.warning(f'{h} ├──> Role Korp-{Creature.korp.id} not found')
+                    elif korprole not in ctx.author.roles:
                         await ctx.author.add_roles(korprole)
                 except Exception as e:
                     await ctx.respond(
                         embed=discord.Embed(
-                            description=f"Discord add-role:Korp-{Creature.korp} KO\n[{e}]",
+                            description=f"Discord add-role:Korp-{Creature.korp.id} KO\n[{e}]",
                             colour=discord.Colour.red(),
                             ),
                         ephemeral=True,
@@ -145,7 +151,11 @@ def grant(group_user, bot):
                     return
                 # Add the Squad role to the user
                 try:
-                    if squadrole not in ctx.author.roles:
+                    if squadrole is None:
+                        # Role not created yet (subtasks/channels.py): skip it
+                        missing_roles.append(f"Squad-{Creature.squad.id}")
+                        logger.warning(f'{h} ├──> Role Squad-{Creature.squad.id} not found')
+                    elif squadrole not in ctx.author.roles:
                         await ctx.author.add_roles(squadrole)
                 except Exception as e:
                     await ctx.respond(
@@ -158,10 +168,22 @@ def grant(group_user, bot):
                     return
 
         logger.info(f'{h} ├──> Query OK')
-        await ctx.respond(
-            embed=discord.Embed(
-                description="Discord & Squad/Korp grant :ok:",
-                colour=discord.Colour.green()
+        if missing_roles:
+            missing = ', '.join(f'`{name}`' for name in missing_roles)
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=(
+                        "Discord & Squad/Korp grant :ok:\n"
+                        f"Role(s) not found yet, try again later: {missing}"
+                        ),
+                    colour=discord.Colour.orange()
+                    )
                 )
-            )
+        else:
+            await ctx.respond(
+                embed=discord.Embed(
+                    description="Discord & Squad/Korp grant :ok:",
+                    colour=discord.Colour.green()
+                    )
+                )
         logger.info(f'{h} └──> Answer sent')

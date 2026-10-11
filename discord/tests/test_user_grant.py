@@ -99,3 +99,60 @@ async def test_grant_skips_korp_role_for_pending_invitee(bot, make_ctx, get_call
 
     assert _granted_role_names(ctx) == ['Singouins']
     assert ctx.respond.call_count == 1
+
+
+async def test_grant_gives_korp_then_squad_role_to_korp_member(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
+    # Regression test: the Korp role used to be looked up as
+    # `Korp-{Creature.korp}` (the embedded document, not its id), so it was
+    # never found and the Squad role was never granted either.
+    user = make_user(discord={'name': 'tester', 'ack': False})
+    korp_id = uuid.uuid4()
+    squad_id = uuid.uuid4()
+    make_creature(
+        account=user.id,
+        korp=CreatureKorp(id=korp_id, rank='Member'),
+        squad=CreatureSquad(id=squad_id, rank='Member'),
+        )
+
+    group = bot.create_group(name='user', description='test')
+    grant_command(group, bot)
+    callback = get_callback(group, 'grant')
+
+    roles = [
+        _make_role('Singouins'),
+        _make_role(f'Korp-{korp_id}'),
+        _make_role(f'Squad-{squad_id}'),
+        ]
+    ctx = make_ctx(author_name='tester', guild_roles=roles)
+    await callback(ctx)
+
+    assert _granted_role_names(ctx) == ['Singouins', f'Korp-{korp_id}', f'Squad-{squad_id}']  # noqa: E501
+    assert ctx.respond.call_count == 1
+
+
+async def test_grant_skips_role_missing_from_guild(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
+    # A Squad/Korp role not created yet in the guild must not be passed to
+    # add_roles(None): it is skipped, reported, and the command completes.
+    user = make_user(discord={'name': 'tester', 'ack': False})
+    korp_id = uuid.uuid4()
+    squad_id = uuid.uuid4()
+    make_creature(
+        account=user.id,
+        korp=CreatureKorp(id=korp_id, rank='Member'),
+        squad=CreatureSquad(id=squad_id, rank='Leader'),
+        )
+
+    group = bot.create_group(name='user', description='test')
+    grant_command(group, bot)
+    callback = get_callback(group, 'grant')
+
+    # Korp role missing, Squad role present
+    roles = [_make_role('Singouins'), _make_role(f'Squad-{squad_id}')]
+    ctx = make_ctx(author_name='tester', guild_roles=roles)
+    await callback(ctx)
+
+    assert None not in [call.args[0] for call in ctx.author.add_roles.await_args_list]  # noqa: E501
+    assert _granted_role_names(ctx) == ['Singouins', f'Squad-{squad_id}']
+    assert ctx.respond.call_count == 1
+    embed = ctx.respond.await_args.kwargs['embed']
+    assert f'Korp-{korp_id}' in embed.description
