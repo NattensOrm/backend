@@ -14,7 +14,7 @@ from utils.decorators import (
     )
 from utils.pa import equip_cost, instance_tick, pa_shortfall_colour
 from utils.redis import r, get_pa, consume_pa
-from variables import metaNames
+from variables import metaIndexed, metaNames
 
 
 #
@@ -97,7 +97,7 @@ def equip(creatureuuid, type, slotname, itemuuid):
         elif slotname == 'righthand':
             if g.Creature.slots.righthand:
                 # Something is already equipped in RH
-                equippedMeta = metaNames['weapon'][g.Creature.slots.righthand.metaid]
+                equippedMeta = metaIndexed['weapon'][g.Creature.slots.righthand.metaid]
                 # We equip a 1H weapon
                 if int(sizex) * int(sizey) <= 6:
                     if equippedMeta['onehanded'] is True:
