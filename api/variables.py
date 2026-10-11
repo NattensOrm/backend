@@ -46,7 +46,9 @@ GUNICORN_PORT    = os.environ.get("GUNICORN_PORT", 5000)
 GUNICORN_BIND    = f'{GUNICORN_HOST}:{GUNICORN_PORT}'
 GUNICORN_WORKERS = os.environ.get("GUNICORN_WORKERS", 1)
 GUNICORN_THREADS = os.environ.get("GUNICORN_THREADS", 2)
-GUNICORN_RELOAD  = os.environ.get("GUNICORN_RELOAD", True)
+# Off by default: StandaloneApplication hands Gunicorn an already-imported app,
+# so a reloaded worker is re-forked with the same old code anyway
+GUNICORN_RELOAD  = os.environ.get("GUNICORN_RELOAD", False)
 
 # Static data
 rarity_levels = {
