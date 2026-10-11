@@ -162,6 +162,94 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
             r.set(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", 'None', ex=new_ttl)
 
 
+# Every Redis key family a Creature can own while inside an Instance.
+# Placeholders: {env} (API_ENV), {instance} (Instance uuid), {creature} (Creature uuid).
+# The bearer segment is matched exactly (never *{creature}*): ids are uuids,
+# and a key is owned by a Creature only when a whole segment is its id.
+CREATURE_KEY_PATTERNS = (
+    # Creature-wide PA pools, not scoped by Instance (see get_pa/consume_pa)
+    '{env}:pas:{creature}:*',
+    # 5-segment actives: effects/statuses/cds, a trailing name after the bearer
+    # (see routes/mypc/actives.py and action/profession/tracking.py)
+    '{env}:{instance}:*:{creature}:*',
+    # Defensive: matches no key written today. Any future 4-segment key ending
+    # with the bearer (e.g. a prefixed ammo key) is covered by construction
+    '{env}:{instance}:*:{creature}',
+    # The resolver's ammo key, as its contract spells it (no API_ENV prefix)
+    '{instance}:ammo:{creature}',
+    )
+
+
+def purge_creature_keys(creatureuuid: str, instanceuuid: str) -> int:
+    """
+    Deletes every Redis key a Creature owns in an Instance, plus its PA pools.
+
+    Outside an instance nothing of the creature exists in Redis (ruling 2026-10-08):
+    PA pools are expiring keys (absent = full pool), actives and ammo are scoped
+    by Instance. Only the Instance being left is purged, plus the creature-wide
+    PA keys; actives of the same Creature in another Instance are not touched.
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
+
+    :param creatureuuid: The UUID of the creature.
+    :param instanceuuid: The UUID of the instance being left.
+
+    :return: The number of deleted keys.
+    """
+    deleted = 0
+    for pattern in CREATURE_KEY_PATTERNS:
+        match = pattern.format(
+            env=env_vars['API_ENV'],
+            instance=instanceuuid,
+            creature=creatureuuid,
+            )
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (creatureuuid:{creatureuuid}, deleted:{deleted})')
+    return deleted
+
+
+INSTANCE_KEY_PATTERNS = (
+    # Everything scoped by the Instance under the API_ENV prefix: actives of
+    # every bearer (players already purged on leave, mobs, anything else)
+    '{env}:{instance}:*',
+    # The resolver's Instance-scoped keys (no API_ENV prefix), e.g. ammo
+    '{instance}:*',
+    )
+
+
+def purge_instance_keys(instanceuuid: str) -> int:
+    """
+    Deletes every Redis key scoped by an Instance, whoever the bearer is.
+
+    Called once the Instance is closed (last player gone, mobs deleted): a
+    deleted Instance takes its mobs with it, so nothing of it may outlive it
+    (ruling 2026-10-08). Creature-wide keys (PA pools) are not scoped by
+    Instance and are purged per creature, see purge_creature_keys().
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
+
+    :param instanceuuid: The UUID of the closed instance.
+
+    :return: The number of deleted keys.
+    """
+    deleted = 0
+    for pattern in INSTANCE_KEY_PATTERNS:
+        match = pattern.format(env=env_vars['API_ENV'], instance=instanceuuid)
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (instanceuuid:{instanceuuid}, deleted:{deleted})')
+    return deleted
+
+
 def cput(channel: str, msg: dict) -> None:
     """
     Publishes a message (dict) to a specified Redis PubSub channel.

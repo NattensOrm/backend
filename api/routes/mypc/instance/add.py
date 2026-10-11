@@ -58,6 +58,17 @@ def add(creatureuuid):
             }
         ), 400
 
+    if g.Creature.instance:
+        msg = f'{g.h} already in Instance({g.Creature.instance})'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
     # Check if map related to mapid exists
     try:
         Map = MetaMap.objects(_id=instance.mapid).get()
