@@ -26,6 +26,7 @@ PA_COST_BLUE = 2
 @jwt_required()
 # Custom decorators
 @exists.creature
+@belongs.creature_out_of_instance
 @exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE)
 @exists.item
 @belongs.item_to_creature
