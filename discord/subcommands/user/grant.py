@@ -8,6 +8,10 @@ from discord.ext import commands
 from mongo.models.Creature import CreatureDocument
 from mongo.models.User import UserDocument
 
+# Squad/Korp ranks that make a Creature an actual member.
+# 'Pending' (invited, not accepted yet) is deliberately left out.
+MEMBER_RANKS = ('Leader', 'Member')
+
 
 def grant(group_user, bot):
     @group_user.command(
@@ -90,7 +94,8 @@ def grant(group_user, bot):
 
         for Creature in Creatures:
             # Korp management
-            if Creature.korp.id:
+            # A Pending invitee is not a member yet: no role until it accepts
+            if Creature.korp.id and Creature.korp.rank in MEMBER_RANKS:
                 # Get the Korp role
                 try:
                     korprole = discord.utils.get(
@@ -121,7 +126,8 @@ def grant(group_user, bot):
                     return
 
             # Squad management
-            if Creature.squad.id:
+            # A Pending invitee is not a member yet: no role until it accepts
+            if Creature.squad.id and Creature.squad.rank in MEMBER_RANKS:
                 # Get the Squad role to the user
                 try:
                     squadrole = discord.utils.get(
