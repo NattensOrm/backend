@@ -42,7 +42,7 @@ from mongo.models.Satchel import (
 from mongo.models.Skill import SkillDocument
 
 from utils.decorators import check_is_json, check_user_exists
-from variables import metaNames
+from variables import metaIndexed, metaNames
 
 
 class CosmeticDataSchema(BaseModel):
@@ -340,7 +340,7 @@ def mypc_add():
             # value is the actual EquipmentItem instance (meta_id, meta_type)
 
             EquipmentItem = getattr(Singouin.equipment, slot)
-            itemmeta = metaNames[EquipmentItem.metatype][EquipmentItem.metaid]
+            itemmeta = metaIndexed[EquipmentItem.metatype][EquipmentItem.metaid]
             ammo = None
 
             """

@@ -28,7 +28,7 @@ def test_singouins_action_reload(jwt_header, myitems):
     assert response.status_code == 200
     assert response.json().get("success") is True
     assert 'Reload Query OK' in response.json().get("msg")
-    assert response.json().get("payload")['weapon']['ammo'] == 6
+    assert response.json().get("payload")['weapon']['ammo'] == 8
 
     response = requests.get(f'{API_URL}/mypc/{CREATURE_ID}/item', headers=jwt_header['access'])
 
