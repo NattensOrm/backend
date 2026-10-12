@@ -19,8 +19,8 @@ sys.path.append(LOCAL_PATH)
 # is an embedded document with id None (or, on old documents, no embedded
 # document at all). It must answer "Creature not in a Korp/Squad".
 #
-# Regression: the former guard `hasattr(g.Creature.korp, 'id') is False` was
-# always True when the embedded document exists with id None, so
+# Regression: the former guard `hasattr(g.Creature.korp, 'id') is False` never
+# fired when the embedded document exists with id None, so
 # test_no_membership_id_none_is_not_in_a failed: the creature fell through to
 # "Creature not in this Korp/Squad". Pure unit test: no Mongo, no Redis.
 
