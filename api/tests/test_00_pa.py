@@ -17,7 +17,6 @@ from utils.pa import (  # noqa: E402
     BLUE_PA_MAX,
     EQUIP_RED_PA_BY_SIZE,
     RED_PA_MAX,
-    equip_cost,
     pa_cost_split,
     pa_durations,
     pa_from_ttl,
