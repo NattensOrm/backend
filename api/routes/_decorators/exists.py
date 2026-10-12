@@ -13,6 +13,7 @@ from mongo.models.Korp import KorpDocument
 from mongo.models.Squad import SquadDocument
 from mongo.models.User import UserDocument
 
+from utils.pa import instance_tick, pa_shortfall_colour
 from utils.redis import consume_pa, get_pa
 
 
@@ -122,19 +123,27 @@ def pa(red=0, blue=0, consume=False):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            for color, required in [('red', red), ('blue', blue)]:
-                if get_pa(creatureuuid=g.Creature.id)[color]['pa'] < required:
-                    return jsonify({
-                        "success": False,
-                        "msg": f"{g.h} Not enough PA({color}) for this action",
-                        "payload": get_pa(creatureuuid=g.Creature.id),
-                    }), 200
+            tick = instance_tick(g.Creature)
+            if tick is None:
+                # Designer ruling: outside an Instance there are no PA, nothing to check
+                logger.trace(f'[Creature.id:{g.Creature.id}] not in an Instance: no PA check')
+                return func(*args, **kwargs)
+
+            pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
+            # Designer ruling Q104: red PA cover a blue shortfall
+            color = pa_shortfall_colour(pa['red']['pa'], pa['blue']['pa'], red, blue)
+            if color is not None:
+                return jsonify({
+                    "success": False,
+                    "msg": f"{g.h} Not enough PA({color}) for this action",
+                    "payload": pa,
+                }), 200
 
             logger.trace(f'[Creature.id:{g.Creature.id}] has enough PA for this action')
 
-            if consume is True and g.Creature.instance:
+            if consume is True:
                 # We consume the PA
-                consume_pa(creatureuuid=g.Creature.id, bluepa=blue, redpa=red)
+                consume_pa(creatureuuid=g.Creature.id, bluepa=blue, redpa=red, tick=tick)
 
             return func(*args, **kwargs)
         return wrapper

@@ -27,6 +27,7 @@ from utils.decorators import (
     check_creature_exists,
     check_is_json,
     )
+from utils.discord import discord_scopes
 from utils.redis import cput, qput
 from variables import metaIndexed, rarity_array, YQ_DISCORD
 
@@ -57,6 +58,17 @@ def add(creatureuuid):
                 "payload": e.errors(),
             }
         ), 400
+
+    if g.Creature.instance:
+        msg = f'{g.h} already in Instance({g.Creature.instance})'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
 
     # Check if map related to mapid exists
     try:
@@ -101,11 +113,7 @@ def add(creatureuuid):
 
     # Everything went well, creation DONE
     # We put the info in queue for Discord
-    scopes = []
-    if hasattr(g.Creature.korp, 'id'):
-        scopes.append(f'Korp-{g.Creature.korp.id}')
-    if hasattr(g.Creature.korp, 'id'):
-        scopes.append(f'Squad-{g.Creature.squad.id}')
+    scopes = discord_scopes(g.Creature)
     for scope in scopes:
         # Discord Queue
         qput(YQ_DISCORD, {

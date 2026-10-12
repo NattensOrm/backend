@@ -12,6 +12,7 @@ from kubernetes.stream import stream
 from subcommands.infra._tools import K8S_REQUEST_TIMEOUT, log_pretty
 
 NAMESPACE = 'singouins-databases'
+LABEL_SELECTOR = 'app=backup'
 # Max wait (seconds) for the exec'd script: stream() defaults to 60s and
 # then silently returns a partial output. Must stay < 900 (Discord token)
 EXEC_TIMEOUT = {
@@ -25,9 +26,13 @@ async def pod_exec(command, timeout):
     pod = await asyncio.to_thread(
         client.CoreV1Api().list_namespaced_pod,
         NAMESPACE,
-        label_selector="name=backup",
+        label_selector=LABEL_SELECTOR,
         _request_timeout=K8S_REQUEST_TIMEOUT,
         )
+    if not pod.items:
+        raise RuntimeError(
+            f'No pod with label {LABEL_SELECTOR} in {NAMESPACE}'
+            )
 
     start = asyncio.get_running_loop().time()
     exec_stdout = await asyncio.to_thread(

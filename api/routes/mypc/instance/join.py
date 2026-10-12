@@ -11,6 +11,7 @@ from utils.decorators import (
     check_creature_exists,
     check_instance_exists,
     )
+from utils.discord import discord_scopes
 from utils.redis import qput
 from variables import YQ_DISCORD
 
@@ -21,8 +22,19 @@ from variables import YQ_DISCORD
 @check_creature_exists
 @check_instance_exists
 def join(creatureuuid, instanceuuid):
-    if hasattr(g.Creature.instance, 'id'):
-        msg = f'{g.h} in in Instance({g.Creature.instance})'
+    if g.Creature.instance:
+        msg = f'{g.h} already in Instance({g.Creature.instance})'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    if g.Creature.id in g.Instance.leavers:
+        msg = f'{g.h} Instance({g.Instance.id}) Join KO: left before, no re-entry'
         logger.warning(msg)
         return jsonify(
             {
@@ -54,11 +66,7 @@ def join(creatureuuid, instanceuuid):
             ), 200
     else:
         # We put the info in queue for Discord
-        scopes = []
-        if hasattr(g.Creature.korp, 'id'):
-            scopes.append(f'Korp-{g.Creature.korp.id}')
-        if hasattr(g.Creature.korp, 'id'):
-            scopes.append(f'Squad-{g.Creature.squad.id}')
+        scopes = discord_scopes(g.Creature)
         for scope in scopes:
             # Discord Queue
             qput(YQ_DISCORD, {

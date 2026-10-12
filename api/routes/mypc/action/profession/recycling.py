@@ -16,6 +16,7 @@ from routes.mypc.action.profession._tools import (
     profession_gain,
     profession_scaled,
     )
+from utils.pa import instance_tick
 from utils.redis import get_pa
 from variables import rarity_array
 
@@ -34,6 +35,7 @@ PROFESSION_NAME = 'recycling'
 @jwt_required()
 # Custom decorators
 @exists.creature
+@belongs.creature_out_of_instance
 @exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
 @exists.item
 @belongs.item_to_creature
@@ -84,7 +86,7 @@ def recycling(creatureuuid, itemuuid):
             "success": True,
             "msg": msg,
             "payload": {
-                "pa": get_pa(creatureuuid=g.Creature.id),
+                "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
                 "resource": [
                     {
                         "count": shards_qty,

@@ -100,10 +100,14 @@ def item(group_bazaar, bot):
             item_price = sizex * sizey * (meta['tier'] + 1) * RARITY_ITEM.index(Item.rarity) // 2
 
         try:
-            # We do the financial transaction
-            Satchel.currency.banana += item_price
-            Satchel.updated = datetime.datetime.utcnow()
-            Satchel.save()
+            # We do the financial transaction, atomically
+            credited = SatchelDocument.objects(_id=singouin_uuid).update_one(
+                inc__currency__banana=item_price,
+                set__updated=datetime.datetime.utcnow(),
+                )
+            if credited == 0:
+                raise SatchelDocument.DoesNotExist(f'Satchel {singouin_uuid} NotFound')
+            Satchel.reload()
             # We shelve the Item
             Item.bearer = "00000000-cafe-cafe-cafe-000000000000"
             Item.bound = False

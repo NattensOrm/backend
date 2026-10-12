@@ -6,7 +6,17 @@ import redis
 import yarqueue
 
 from loguru import logger
+from typing import Optional
 
+from utils.pa import (
+    BLUE_PA_MAX,
+    RED_PA_MAX,
+    pa_cost_split,
+    pa_durations,
+    pa_from_ttl,
+    pa_spend_split,
+    ttl_after_spend,
+    )
 from variables import env_vars
 
 # This used to be a symlink to a connector shared with auth/discord
@@ -93,20 +103,23 @@ def str2typed(string: str):
     return string
 
 
-def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
+def get_pa(creatureuuid: str, *, tick: Optional[int]) -> Optional[dict]:
     """
     Retrieves the blue and red PA and their TTL for a Creature.
 
     :param creatureuuid: The UUID of the creature.
-    :param duration: The duration in seconds for PA calculation. Default is 3600 seconds (1 hour).
+    :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
+                 Red regenerates 1 PA per tick, blue 1 PA per 2 ticks.
+                 Mandatory: pass None explicitly when the Creature is not in an Instance,
+                 there are no pools then, Redis is not touched and None is returned.
 
-    :return: A dictionary with PA and TTL information for both blue and red.
+    :return: A dictionary with PA and TTL information for both blue and red,
+             or None when the Creature is not in an Instance.
     """
-    # Constants
-    RED_PA_MAX = 16
-    RED_PA_MAXTTL = RED_PA_MAX * duration
-    BLUE_PA_MAX = 8
-    BLUE_PA_MAXTTL = BLUE_PA_MAX * duration
+    if tick is None:
+        return None
+
+    durations = pa_durations(tick)
 
     ttls = {
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
@@ -114,36 +127,64 @@ def get_pa(creatureuuid: str, duration: int = 3600) -> dict:
     }
 
     return {
-        "blue": {
-            "pa": int(round((BLUE_PA_MAXTTL - abs(ttls['blue'])) / duration)),
-            "ttnpa": ttls['blue'] % duration,
-            "ttl": ttls['blue'],
-        },
-        "red": {
-            "pa": int(round((RED_PA_MAXTTL - abs(ttls['red'])) / duration)),
-            "ttnpa": ttls['red'] % duration,
-            "ttl": ttls['red'],
-        },
+        "blue": pa_from_ttl(ttls['blue'], BLUE_PA_MAX, durations['blue']),
+        "red": pa_from_ttl(ttls['red'], RED_PA_MAX, durations['red']),
     }
 
 
-def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int = 3600) -> None:
+def consume_pa(
+    creatureuuid: str,
+    redpa: int = 0,
+    bluepa: int = 0,
+    *,
+    tick: Optional[int],
+) -> None:
     """
     Consumes a specified number of blue and/or red PAs for a Creature.
 
+    Designer ruling Q104 ("red PA pay for everything"): the blue cost is spent
+    from the blue pool as far as it goes, the shortfall is spent from the red
+    pool on top of the red cost (see utils.pa.pa_cost_split()).
+
     :param creatureuuid: The UUID of the creature.
-    :param redpa: The number of red PAs to consume (default is 0).
-    :param bluepa: The number of blue PAs to consume (default is 0).
-    :param duration: The duration of each PA in seconds (default is 3600 seconds).
+    :param redpa: The red PA cost of the action (default is 0).
+    :param bluepa: The blue PA cost of the action (default is 0),
+                   red PA cover what the blue pool lacks.
+    :param tick: The tick (seconds) of the Creature's Instance, see utils.pa.instance_tick().
+                 Each red PA spent costs one tick of TTL, each blue PA two ticks.
+                 Mandatory: pass None explicitly when the Creature is not in an Instance,
+                 there are no pools then, nothing is consumed and Redis is not touched.
     """
+    if tick is None:
+        logger.trace(f'[Creature.id:{creatureuuid}] not in an Instance: no PA to consume')
+        return
+
+    durations = pa_durations(tick)
+
     ttls = {
         "blue": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue"),
         "red": r.ttl(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red"),
     }
 
+    # Designer ruling Q104: blue is spent first, red covers the blue shortfall
+    available = {
+        "blue": pa_from_ttl(ttls['blue'], BLUE_PA_MAX, durations['blue'])['pa'],
+        "red": pa_from_ttl(ttls['red'], RED_PA_MAX, durations['red'])['pa'],
+    }
+    split = pa_cost_split(available['red'], available['blue'], redpa, bluepa)
+    if split is None:
+        # The pools changed between the check and now (concurrent request):
+        # spend anyway with the same formula, never raise mid-action
+        split = pa_spend_split(available['blue'], redpa, bluepa)
+        logger.warning(
+            f'[Creature.id:{creatureuuid}] PA(red:{redpa}, blue:{bluepa}) unaffordable at consume '
+            f'(available red:{available["red"]}, blue:{available["blue"]}): spending anyway'
+            )
+    redpa, bluepa = split['red'], split['blue']
+
     if bluepa > 0:
         logger.trace(f'Consuming PA (blue:{bluepa})')
-        new_ttl = ttls['blue'] + (bluepa * duration)
+        new_ttl = ttl_after_spend(ttls['blue'], bluepa, durations['blue'])
         if ttls['blue'] > 0:
             # Key still exists (PA count < PA max)
             r.expire(f"{env_vars['API_ENV']}:pas:{creatureuuid}:blue", new_ttl)
@@ -153,13 +194,101 @@ def consume_pa(creatureuuid: str, redpa: int = 0, bluepa: int = 0, duration: int
 
     if redpa > 0:
         logger.trace(f'Consuming PA (red:{redpa})')
-        new_ttl = ttls['red'] + (redpa * duration)
+        new_ttl = ttl_after_spend(ttls['red'], redpa, durations['red'])
         if ttls['red'] > 0:
             # Key still exists (PA count < PA max)
             r.expire(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", new_ttl)
         else:
             # Key does not exist anymore (PA count = PA max)
             r.set(f"{env_vars['API_ENV']}:pas:{creatureuuid}:red", 'None', ex=new_ttl)
+
+
+# Every Redis key family a Creature can own while inside an Instance.
+# Placeholders: {env} (API_ENV), {instance} (Instance uuid), {creature} (Creature uuid).
+# The bearer segment is matched exactly (never *{creature}*): ids are uuids,
+# and a key is owned by a Creature only when a whole segment is its id.
+CREATURE_KEY_PATTERNS = (
+    # Creature-wide PA pools, not scoped by Instance (see get_pa/consume_pa)
+    '{env}:pas:{creature}:*',
+    # 5-segment actives: effects/statuses/cds, a trailing name after the bearer
+    # (see routes/mypc/actives.py and action/profession/tracking.py)
+    '{env}:{instance}:*:{creature}:*',
+    # Defensive: matches no key written today. Any future 4-segment key ending
+    # with the bearer (e.g. a prefixed ammo key) is covered by construction
+    '{env}:{instance}:*:{creature}',
+    # The resolver's ammo key, as its contract spells it (no API_ENV prefix)
+    '{instance}:ammo:{creature}',
+    )
+
+
+def purge_creature_keys(creatureuuid: str, instanceuuid: str) -> int:
+    """
+    Deletes every Redis key a Creature owns in an Instance, plus its PA pools.
+
+    Outside an instance nothing of the creature exists in Redis (ruling 2026-10-08):
+    PA pools are expiring keys (absent = full pool), actives and ammo are scoped
+    by Instance. Only the Instance being left is purged, plus the creature-wide
+    PA keys; actives of the same Creature in another Instance are not touched.
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
+
+    :param creatureuuid: The UUID of the creature.
+    :param instanceuuid: The UUID of the instance being left.
+
+    :return: The number of deleted keys.
+    """
+    deleted = 0
+    for pattern in CREATURE_KEY_PATTERNS:
+        match = pattern.format(
+            env=env_vars['API_ENV'],
+            instance=instanceuuid,
+            creature=creatureuuid,
+            )
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (creatureuuid:{creatureuuid}, deleted:{deleted})')
+    return deleted
+
+
+INSTANCE_KEY_PATTERNS = (
+    # Everything scoped by the Instance under the API_ENV prefix: actives of
+    # every bearer (players already purged on leave, mobs, anything else)
+    '{env}:{instance}:*',
+    # The resolver's Instance-scoped keys (no API_ENV prefix), e.g. ammo
+    '{instance}:*',
+    )
+
+
+def purge_instance_keys(instanceuuid: str) -> int:
+    """
+    Deletes every Redis key scoped by an Instance, whoever the bearer is.
+
+    Called once the Instance is closed (last player gone, mobs deleted): a
+    deleted Instance takes its mobs with it, so nothing of it may outlive it
+    (ruling 2026-10-08). Creature-wide keys (PA pools) are not scoped by
+    Instance and are purged per creature, see purge_creature_keys().
+
+    Keys are found with SCAN (never KEYS in app code) and deleted in one
+    DEL per pattern family.
+
+    :param instanceuuid: The UUID of the closed instance.
+
+    :return: The number of deleted keys.
+    """
+    deleted = 0
+    for pattern in INSTANCE_KEY_PATTERNS:
+        match = pattern.format(env=env_vars['API_ENV'], instance=instanceuuid)
+        # count is a hint per SCAN call: fewer round trips than the default of 10
+        keys = list(r.scan_iter(match=match, count=1000))
+        if keys:
+            deleted += r.delete(*keys)
+
+    logger.trace(f'Purged Redis keys (instanceuuid:{instanceuuid}, deleted:{deleted})')
+    return deleted
 
 
 def cput(channel: str, msg: dict) -> None:

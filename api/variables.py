@@ -21,18 +21,30 @@ for var, value in env_vars.items():
     if var in _SENSITIVE_VARS and value is not None:
         value = f'{value[:4]}...{value[-4:]}'
     logger.debug(f"{var}: {value}")
+if not env_vars['API_ENV']:
+    logger.warning('API_ENV unset: Redis keys, queues and the AI channel are named after None')
 
 # API variables
 # SEP_SECRET_KEY is needed here too (not just in auth/) - this service
 # still verifies/revokes JWTs minted by the auth service, via the same
 # secret and the same Redis blocklist keys. See main.py's JWTManager.
 SEP_SECRET_KEY = os.environ['SEP_SECRET_KEY']
+# SEP_INTERNAL_TOKEN guards the /internal/* routes, called service-to-service
+# by the fight resolver (never by a client). Shared with the resolver through
+# a k8s Secret. Unset = internal routes disabled (they answer 503).
+SEP_INTERNAL_TOKEN = os.environ.get("SEP_INTERNAL_TOKEN")
+if not SEP_INTERNAL_TOKEN:
+    logger.warning('SEP_INTERNAL_TOKEN unset: /internal/* routes are disabled')
 
 # YarQueue variables
 YQ_BROADCAST = os.environ.get("YQ_BROADCAST", f"{env_vars['API_ENV']}:yarqueue:broadcast")
 YQ_DISCORD   = os.environ.get("YQ_DISCORD", f"{env_vars['API_ENV']}:yarqueue:discord")
 # PubSub variables
 PS_BROADCAST = os.environ.get("PS_BROADCAST", 'ws-broadcast')
+# The AI listens on ai-creature-<env> (ai/variables.py CREATURE_PATH), which
+# has no env override: none here either, so both sides follow the same rule.
+# str() so an unset API_ENV gives 'ai-creature-none' instead of an import crash
+PS_AI_CREATURE = f"ai-creature-{str(env_vars['API_ENV']).lower()}"
 
 # Resolver variables
 RESOLVER_HOST = os.environ.get("RESOLVER_HOST", 'resolver-svc')
@@ -46,7 +58,9 @@ GUNICORN_PORT    = os.environ.get("GUNICORN_PORT", 5000)
 GUNICORN_BIND    = f'{GUNICORN_HOST}:{GUNICORN_PORT}'
 GUNICORN_WORKERS = os.environ.get("GUNICORN_WORKERS", 1)
 GUNICORN_THREADS = os.environ.get("GUNICORN_THREADS", 2)
-GUNICORN_RELOAD  = os.environ.get("GUNICORN_RELOAD", True)
+# Off by default: StandaloneApplication hands Gunicorn an already-imported app,
+# so a reloaded worker is re-forked with the same old code anyway
+GUNICORN_RELOAD  = os.environ.get("GUNICORN_RELOAD", False)
 
 # Static data
 rarity_levels = {

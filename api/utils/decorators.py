@@ -11,6 +11,7 @@ from mongo.models.Korp import KorpDocument
 from mongo.models.Squad import SquadDocument
 from mongo.models.User import UserDocument
 
+from utils.pa import instance_tick, pa_shortfall_colour
 from utils.redis import get_pa
 
 
@@ -100,7 +101,7 @@ def check_creature_in_instance(func):
 def check_creature_in_korp(func):
     """ Decorator to check if g.Creature is in g.Korp """
     def wrapper(*args, **kwargs):
-        if hasattr(g.Creature.korp, 'id') is False:
+        if g.Creature.korp is None or g.Creature.korp.id is None:
             msg = f'[Creature.id:{g.Creature.id}] Creature not in a Korp'
             logger.warning(msg)
             return jsonify(
@@ -132,7 +133,7 @@ def check_creature_in_korp(func):
 def check_creature_in_squad(func):
     """ Decorator to check if g.Creature is in g.Squad """
     def wrapper(*args, **kwargs):
-        if hasattr(g.Creature.squad, 'id') is False:
+        if g.Creature.squad is None or g.Creature.squad.id is None:
             msg = f'[Creature.id:{g.Creature.id}] Creature not in a Squad'
             logger.warning(msg)
             return jsonify(
@@ -195,22 +196,22 @@ def check_creature_pa(red=0, blue=0):
     """ Decorator to check if g.Creature has an amount of PA(red, blue) """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            if get_pa(creatureuuid=g.Creature.id)['blue']['pa'] < blue:
-                msg = f'{g.h} Not enough PA(blue) for this action'
+            tick = instance_tick(g.Creature)
+            if tick is None:
+                # Designer ruling: outside an Instance there are no PA, nothing to check
+                logger.trace(f'[Creature.id:{g.Creature.id}] not in an Instance: no PA check')
+                return func(*args, **kwargs)
+
+            pa = get_pa(creatureuuid=g.Creature.id, tick=tick)
+            # Designer ruling Q104: red PA cover a blue shortfall
+            color = pa_shortfall_colour(pa['red']['pa'], pa['blue']['pa'], red, blue)
+            if color is not None:
+                msg = f'{g.h} Not enough PA({color}) for this action'
                 return jsonify(
                     {
                         "success": False,
                         "msg": msg,
-                        "payload": get_pa(creatureuuid=g.Creature.id),
-                    }
-                ), 200
-            elif get_pa(creatureuuid=g.Creature.id)['red']['pa'] < red:
-                msg = f'{g.h} Not enough PA(red) for this action'
-                return jsonify(
-                    {
-                        "success": False,
-                        "msg": msg,
-                        "payload": get_pa(creatureuuid=g.Creature.id),
+                        "payload": pa,
                     }
                 ), 200
             else:

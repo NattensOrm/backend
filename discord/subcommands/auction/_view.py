@@ -104,15 +104,42 @@ class buyView(View):
             return
 
         try:
+            # We debit the buyer first, atomically, guarded on the balance.
+            # The guard is the authority (the check above can be stale): if it
+            # refuses, nothing has been changed yet and the auction stays.
+            debited = SatchelDocument.objects(
+                _id=self.buyeruuid,
+                currency__banana__gte=Auction.price,
+                ).update_one(
+                    dec__currency__banana=Auction.price,
+                    set__updated=datetime.datetime.utcnow(),
+                    )
+            if debited == 0:
+                SatchelBuyer.reload()
+                msg = (
+                    'Not enough money to buy this!\n '
+                    f'You have `{SatchelBuyer.currency.banana}` and Seller price is `{Auction.price}`'  # noqa: E501
+                    )
+                logger.trace(msg)
+                await interaction.response.edit_message(
+                    embed=discord.Embed(
+                        description=msg,
+                        colour=discord.Colour.orange()
+                        ),
+                    view=None,
+                    )
+                return
             # We delete the auction
             Auction.delete()
-            # We do the financial transaction
-            SatchelBuyer.currency.banana -= Auction.price
-            SatchelBuyer.updated = datetime.datetime.utcnow()
-            SatchelBuyer.save()
-            SatchelSeller.currency.banana += Auction.price
-            SatchelSeller.updated = datetime.datetime.utcnow()
-            SatchelSeller.save()
+            # We credit the seller, atomically
+            credited = SatchelDocument.objects(
+                _id=SatchelSeller.id,
+                ).update_one(
+                    inc__currency__banana=Auction.price,
+                    set__updated=datetime.datetime.utcnow(),
+                    )
+            if credited == 0:
+                raise SatchelDocument.DoesNotExist(f'Seller Satchel {SatchelSeller.id} NotFound')
             # We change the Item owner
             Item.auctioned = False
             Item.bearer = CreatureBuyer.id
