@@ -95,7 +95,7 @@ def creature_out_of_instance(func):
 def creature_in_korp(func):
     """ Decorator to check if g.Creature is in g.Korp """
     def wrapper(*args, **kwargs):
-        if hasattr(g.Creature.korp, 'id') is False:
+        if g.Creature.korp is None or g.Creature.korp.id is None:
             msg = f'[Creature.id:{g.Creature.id}] Creature not in a Korp'
             logger.warning(msg)
             return jsonify(
@@ -127,7 +127,7 @@ def creature_in_korp(func):
 def creature_in_squad(func):
     """ Decorator to check if g.Creature is in g.Squad """
     def wrapper(*args, **kwargs):
-        if hasattr(g.Creature.squad, 'id') is False:
+        if g.Creature.squad is None or g.Creature.squad.id is None:
             msg = f'[Creature.id:{g.Creature.id}] Creature not in a Squad'
             logger.warning(msg)
             return jsonify(
