@@ -73,3 +73,14 @@ def test_singouins_auth_discord_unlink_is_idempotent(jwt_header):
 def test_singouins_auth_discord_unlink_needs_login():
     response = requests.delete(f'{API_URL}/discord/link')
     assert response.status_code == 401
+
+
+def test_singouins_auth_infos_shows_discord_link(jwt_header):
+    users.update_one({'_id': USER_ID}, {'$set': {'discord': {'name': 'tester', 'ack': True}}})
+    response = requests.get(f'{API_URL}/infos', headers=jwt_header['access'])
+    assert response.status_code == 200
+    assert response.json()['user']['discord'] == {'name': 'tester', 'ack': True}
+
+    requests.delete(f'{API_URL}/discord/link', headers=jwt_header['access'])
+    response = requests.get(f'{API_URL}/infos', headers=jwt_header['access'])
+    assert response.json()['user']['discord'] == {'ack': False}

@@ -10,19 +10,17 @@ from pydantic import BaseModel, EmailStr
 from mongo.models.User import UserDocument, UserDiscord
 from routes.auth import auth_bp
 from routes.auth.confirmation import send_confirmation_email
-from routes.auth.schemas import MessageResponse, UserResponse, ValidationErrorResponse
+from routes.auth.schemas import (
+    MessageResponse,
+    UserResponse,
+    ValidationErrorResponse,
+    public_user,
+    )
 
 
 class RegisterUserSchema(BaseModel):
     mail: EmailStr
     password: str
-
-
-def _public_user(user):
-    """ user.to_mongo().to_dict(), minus the password hash. """
-    doc = user.to_mongo().to_dict()
-    doc.pop('hash', None)
-    return doc
 
 
 @auth_bp.post(
@@ -54,7 +52,7 @@ def register(body: RegisterUserSchema):
         return jsonify(
             {
                 "msg": msg,
-                "user": _public_user(User),
+                "user": public_user(User),
             }
         ), 409
 
@@ -86,7 +84,7 @@ def register(body: RegisterUserSchema):
         return jsonify(
             {
                 "msg": msg,
-                "user": _public_user(newUser),
+                "user": public_user(newUser),
             }
         ), 201
     else:
@@ -95,6 +93,6 @@ def register(body: RegisterUserSchema):
         return jsonify(
             {
                 "msg": msg,
-                "user": _public_user(newUser),
+                "user": public_user(newUser),
             }
         ), 200
