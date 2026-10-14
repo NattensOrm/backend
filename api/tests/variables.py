@@ -7,19 +7,12 @@ import uuid
 GUNICORN_PORT   = os.environ.get("GUNICORN_PORT", 5000)
 API_ENV         = os.environ.get("API_ENV", 5000)
 API_URL         = f'http://127.0.0.1:{GUNICORN_PORT}'
-# Same name and rule as api/variables.py: the AI creature pubsub channel.
-# utils/instance.py and routes/internal read it at import time
-PS_AI_CREATURE  = f"ai-creature-{str(API_ENV).lower()}"
 
 # /auth/* moved to its own service - api's own tests still need a live
 # login to test everything else, so this points at wherever that service
 # is reachable (see api/scripts/test-local.sh, which boots both).
 AUTH_GUNICORN_PORT = os.environ.get("AUTH_GUNICORN_PORT", 5001)
 AUTH_API_URL       = os.environ.get("AUTH_API_URL", f'http://127.0.0.1:{AUTH_GUNICORN_PORT}')
-
-# Shared token of the /internal/* routes (same env var as the api under test).
-# None = the internal suite (test_15) is skipped
-INTERNAL_TOKEN = os.environ.get("SEP_INTERNAL_TOKEN")
 
 r = redis.StrictRedis(
     host=os.environ.get("REDIS_HOST", '127.0.0.1'),

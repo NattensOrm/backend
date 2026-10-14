@@ -157,6 +157,26 @@ def pa_spend_split(blue_available: int, red_cost: int, blue_cost: int) -> dict:
     }
 
 
+def equip_cost(size: str) -> Optional[dict]:
+    """
+    PA cost of equipping an item, by item size.
+
+    Designer rulings Q102 + Q108: red PA only, by size (see EQUIP_RED_PA_BY_SIZE).
+
+    :param size: The item size from its meta, e.g. '2x3'.
+
+    :return: {'red': red PA cost, 'blue': 0}, or None for a size not in the table.
+    """
+    red = EQUIP_RED_PA_BY_SIZE.get(size)
+    if red is None:
+        return None
+
+    return {
+        'red': red,
+        'blue': 0,
+    }
+
+
 def instance_tick(creature) -> Optional[int]:
     """
     Tick of the Instance the Creature is in, or None when it is in none
