@@ -6,7 +6,7 @@ from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
-from mongo.models.Creature import CreatureSlot
+from mongo.models.Creature import CreatureSlot, CreatureSlots
 
 from utils.decorators import (
     check_creature_exists,
@@ -14,7 +14,13 @@ from utils.decorators import (
     )
 from utils.pa import equip_cost, instance_tick, pa_shortfall_colour
 from utils.redis import r, get_pa, consume_pa
-from variables import metaIndexed, metaNames
+from variables import metaIndexed
+
+#
+# Inventory.equip specifics
+#
+# Item metatypes that can be equipped (metaIndexed also holds 'race')
+EQUIPABLE_TYPES = ('armor', 'weapon')
 
 
 #
@@ -26,7 +32,42 @@ from variables import metaIndexed, metaNames
 @check_creature_exists
 @check_item_exists
 def equip(creatureuuid, type, slotname, itemuuid):
-    itemmeta = [x for x in metaNames[type] if x['_id'] == g.Item.metaid][0]
+    # Path parameter checks: unchecked values used to end in a 500
+    if type not in EQUIPABLE_TYPES or type != g.Item.metatype:
+        msg = (f"{g.h} Equip KO (type:{type} not equipable"
+               f" or not the item metatype:{g.Item.metatype})")
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 400
+
+    if slotname not in CreatureSlots._fields:
+        msg = f"{g.h} Equip KO (slotname:{slotname} unknown)"
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 400
+
+    itemmeta = metaIndexed[type].get(g.Item.metaid)
+    if itemmeta is None:
+        msg = f"{g.h} Equip KO (Meta {type}:{g.Item.metaid} NOTFOUND)"
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 404
+
     sizex, sizey = itemmeta['size'].split("x")
 
     # PA check (designer rulings Q102 + Q108: red PA by item size, no blue).
