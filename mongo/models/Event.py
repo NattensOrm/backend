@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: event
@@ -42,7 +43,7 @@ class EventDocument(Document):
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     action = StringField(required=True)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     dst = UUIDField(binary=False, default=None)
     extra = DynamicField()
     harmful = BooleanField(required=True, default=False)

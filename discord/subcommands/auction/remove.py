@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from discord.commands import option
@@ -8,6 +7,7 @@ from loguru import logger
 
 from mongo.models.Auction import AuctionDocument
 from mongo.models.Item import ItemDocument
+from mongo.utils import utcnow
 
 from subcommands.auction._autocomplete import get_singouin_auctions_list
 from subcommands.singouin._autocomplete import get_mysingouins_list
@@ -81,7 +81,7 @@ def remove(group_auction):
         try:
             Auction.delete()
             Item.auctioned = False
-            Item.updated = datetime.datetime.utcnow()
+            Item.updated = utcnow()
             Item.save()
         except Exception as e:
             description = f'Auction-Remove Query KO [{e}]'

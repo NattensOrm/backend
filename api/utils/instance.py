@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import json
 
 from loguru import logger
@@ -8,6 +7,7 @@ from mongoengine import Q
 
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
+from mongo.utils import JSON_OPTIONS, utcnow
 
 from utils.redis import r, purge_creature_keys, purge_instance_keys
 from variables import PS_AI_CREATURE
@@ -57,7 +57,7 @@ def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> st
     creature.instance = None
     creature.x = None
     creature.y = None
-    creature.updated = datetime.datetime.utcnow()
+    creature.updated = utcnow()
     creature.save()
 
     # Outside an instance nothing of the creature exists in Redis
@@ -81,8 +81,8 @@ def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> st
                 PS_AI_CREATURE,
                 json.dumps({
                     "action": 'kill',
-                    "instance": instance.to_json(),
-                    "creature": Monster.to_json(),
+                    "instance": instance.to_json(json_options=JSON_OPTIONS),
+                    "creature": Monster.to_json(json_options=JSON_OPTIONS),
                     }),
                 )
         except Exception as e:

@@ -11,6 +11,7 @@ from bestiaire import (
     Fungus
     )
 from mongo.models.Creature import CreatureDocument
+from mongo.utils import JSON_OPTIONS
 from utils.redis import r
 
 from variables import (
@@ -53,7 +54,7 @@ async def creature_init():
                     env_vars['CREATURE_PATH'],
                     json.dumps({
                         "action": 'pop',
-                        "creature": Creature.to_json(),
+                        "creature": Creature.to_json(json_options=JSON_OPTIONS),
                     })
                 )
             except Exception as e:

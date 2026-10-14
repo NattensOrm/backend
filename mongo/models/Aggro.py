@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     # StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: aggro
@@ -37,7 +38,7 @@ class AggroDocument(Document):
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     amount = IntField(default=0)
     bearer = UUIDField(binary=False, required=True, default=None)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     instance = UUIDField(binary=False, default=None)
 
     meta = {

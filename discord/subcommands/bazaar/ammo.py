@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from discord.commands import option
 from loguru import logger
 
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from subcommands.singouin._autocomplete import get_mysingouins_list
 from subcommands.bazaar._autocomplete import get_singouin_bazaar_ammo_list
@@ -75,7 +75,7 @@ def ammo(group_bazaar, bot):
                     **{f'ammo__{caliber}__gte': 10},
                     ).update_one(
                         inc__currency__banana=item_price_total,
-                        set__updated=datetime.datetime.utcnow(),
+                        set__updated=utcnow(),
                         **{f'dec__ammo__{caliber}': 10},
                         )
                 if updated == 0:
@@ -99,7 +99,7 @@ def ammo(group_bazaar, bot):
                     currency__banana__gte=item_price_total,
                     ).update_one(
                         dec__currency__banana=item_price_total,
-                        set__updated=datetime.datetime.utcnow(),
+                        set__updated=utcnow(),
                         **{f'inc__ammo__{caliber}': 10},
                         )
                 if updated == 0:

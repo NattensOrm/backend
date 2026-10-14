@@ -8,6 +8,7 @@ from random import randint
 
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
+from mongo.utils import JSON_OPTIONS
 from utils.requests import resolver_move
 from utils.redis import r
 from utils.computation import (
@@ -32,7 +33,7 @@ class Mob(ABC):
         except CreatureDocument.DoesNotExist:
             logger.debug("CreatureDocument Query KO (404)")
         else:
-            logger.trace(f'CreatureDocument: {self.creature.to_json()}')
+            logger.trace(f'CreatureDocument: {self.creature.to_json(json_options=JSON_OPTIONS)}')
 
         # We add Instance info as we need it
         try:
@@ -40,7 +41,7 @@ class Mob(ABC):
         except InstanceDocument.DoesNotExist:
             logger.debug("InstanceDocument Query KO (404)")
         else:
-            logger.trace(f'InstanceDocument: {self.instance.to_json()}')
+            logger.trace(f'InstanceDocument: {self.instance.to_json(json_options=JSON_OPTIONS)}')
 
         # Logging headers
         self.logh = f'[{self.creature.id}] {self.creature.name}'

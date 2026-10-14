@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import random
 
 from flask import g, jsonify
@@ -11,6 +10,7 @@ from mongo.models.Corpse import CorpseDocument
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from routes._decorators import belongs, exists
 from routes.mypc.action.profession._tools import (
@@ -92,7 +92,7 @@ def skinning(creatureuuid, resourceuuid):
         f'inc__profession__{PROFESSION_NAME}': 1,
         'inc__internal__meat__obtained': resource_skinned['meat'],
         'inc__internal__skin__obtained': resource_skinned['skin'],
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update_one(**highscores_update_query)
 
@@ -100,7 +100,7 @@ def skinning(creatureuuid, resourceuuid):
     satchel_update_query = {
         "inc__resource__meat": resource_skinned['meat'],
         "inc__resource__skin": resource_skinned['skin'],
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     SatchelDocument.objects(_id=creatureuuid).update_one(**satchel_update_query)
 

@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from loguru import logger
 
 from mongo.models.User import UserDiscord, UserDocument
+from mongo.utils import utcnow
 from routes.auth import auth_bp
 from routes.auth.schemas import DiscordLinkCodeResponse, MessageResponse
 from utils.token import (
@@ -87,7 +87,7 @@ def discord_unlink():
         revoke_discord_link_code(User.id)
         UserDocument.objects(pk=User.pk).update_one(
             set__discord=UserDiscord(),
-            set__updated=datetime.datetime.utcnow(),
+            set__updated=utcnow(),
             )
     except Exception as e:
         msg = f'Discord unlink KO (username:{username}) [{e}]'

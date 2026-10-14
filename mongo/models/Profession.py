@@ -1,4 +1,3 @@
-import datetime
 import uuid
 
 from mongoengine import (
@@ -14,6 +13,8 @@ from mongoengine.fields import (
     # StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: profession
@@ -39,7 +40,7 @@ class ProfessionDocument(Document):
     skinning = IntField(required=True, default=0)
     tanning = IntField(required=True, default=0)
     tracking = IntField(required=True, default=0)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'professions',

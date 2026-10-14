@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from discord.commands import option
@@ -9,6 +8,7 @@ from loguru import logger
 from mongo.models.Auction import AuctionDocument, AuctionItem, AuctionSeller
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Item import ItemDocument
+from mongo.utils import utcnow
 
 from subcommands.auction._autocomplete import get_singouin_auctionable_item_list
 from subcommands.singouin._autocomplete import get_mysingouins_list
@@ -101,7 +101,7 @@ def sell(group_auction):
             newAuction.save()
 
             Item.auctioned = True
-            Item.updated = datetime.datetime.utcnow()
+            Item.updated = utcnow()
             Item.save()
         except Exception as e:
             description = f'Auction-Sell Query KO [{e}]'

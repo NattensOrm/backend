@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
+from mongo.utils import JSON_OPTIONS, utcnow
 
 from routes._decorators import internal
 from utils.decorators import check_is_json
@@ -138,7 +139,7 @@ def eject(instanceid, creatureid):
             Creature.instance = None
             Creature.x = None
             Creature.y = None
-            Creature.updated = datetime.datetime.utcnow()
+            Creature.updated = utcnow()
             Creature.save()
             purge_creature_keys(creatureuuid=Creature.id, instanceuuid=instanceid)
             result = 'left'
@@ -244,8 +245,8 @@ def remove(instanceid, creatureid):
             PS_AI_CREATURE,
             json.dumps({
                 "action": 'kill',
-                "instance": Instance.to_json(),
-                "creature": Creature.to_json(),
+                "instance": Instance.to_json(json_options=JSON_OPTIONS),
+                "creature": Creature.to_json(json_options=JSON_OPTIONS),
                 }),
             )
         # Nothing of a dead mob may outlive it: its PA pools and actives go

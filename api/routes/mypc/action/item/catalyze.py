@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from routes._decorators import exists, belongs
 from utils.pa import instance_tick
@@ -71,13 +71,13 @@ def catalyze(creatureuuid, itemuuid):
         # Update Item
         g.Item.update(
             set__rarity=next_rarity,
-            set__updated=datetime.datetime.utcnow()
+            set__updated=utcnow()
         )
 
         # Update Satchel amount
         update_data = {
             f"inc__shard__{next_rarity.lower()}": -10,
-            "set__updated": datetime.datetime.utcnow()
+            "set__updated": utcnow()
         }
         Satchel.update(**update_data)
 

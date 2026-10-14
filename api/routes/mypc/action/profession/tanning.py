@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
@@ -9,6 +8,7 @@ from random import choices
 
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from routes._decorators import exists, belongs
 from routes.mypc.action.profession._tools import profession_gain
@@ -62,7 +62,7 @@ def tanning(creatureuuid):
         f'inc__profession__{PROFESSION_NAME}': 1,
         'inc__internal__fur__obtained': resource_tanned['fur'],
         'inc__internal__leather__obtained': resource_tanned['leather'],
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update(**highscores_update_query)
 
@@ -71,7 +71,7 @@ def tanning(creatureuuid):
         "inc__resource__fur": resource_tanned['fur'],
         "inc__resource__leather": resource_tanned['leather'],
         "inc__resource__skin": - 10,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     SatchelDocument.objects(_id=creatureuuid).update_one(**satchel_update_query)
 

@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
@@ -9,6 +8,7 @@ from loguru import logger
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from routes._decorators import exists, belongs
 from routes.mypc.action.profession._tools import (
@@ -55,7 +55,7 @@ def recycling(creatureuuid, itemuuid):
         f'inc__profession__{PROFESSION_NAME}': 1,
         'inc__internal__item__recycled': 1,
         'inc__internal__shard__obtained': shards_qty,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update_one(**highscores_update_query)
 
@@ -63,7 +63,7 @@ def recycling(creatureuuid, itemuuid):
     Satchel = SatchelDocument.objects(_id=creatureuuid).get()
     satchel_update_query = {
         f"inc__shard__{g.Item.rarity.lower()}": shards_qty,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     Satchel.update(**satchel_update_query)
     Satchel.reload()

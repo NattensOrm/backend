@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from utils.decorators import (
     check_creature_exists,
@@ -95,13 +95,13 @@ def reload(creatureuuid, itemuuid):
 
         # We reload the weapon
         g.Item.ammo = itemmeta['max_ammo']
-        g.Item.updated = datetime.datetime.utcnow()
+        g.Item.updated = utcnow()
         g.Item.save()
         # We remove the ammo from Satchel
         Satchel = SatchelDocument.objects().filter(_id=g.Creature.id)
         update_query = {
             f"inc__ammo__{itemmeta['caliber']}": -neededammo,
-            "set__updated": datetime.datetime.utcnow(),
+            "set__updated": utcnow(),
             }
         Satchel.update(**update_query)
         # We consume the PA

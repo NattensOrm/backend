@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import random
 
 from flask import g, jsonify
@@ -11,6 +10,7 @@ from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Resource import ResourceDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from routes._decorators import belongs, exists
 from routes.mypc.action.profession._tools import (
@@ -75,7 +75,7 @@ def gathering(creatureuuid, resourceuuid):
     highscores_update_query = {
         f'inc__profession__{PROFESSION_NAME}': 1,
         'inc__internal__ore__obtained': quantity,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update_one(**highscores_update_query)
 
@@ -83,7 +83,7 @@ def gathering(creatureuuid, resourceuuid):
     Satchel = SatchelDocument.objects(_id=creatureuuid).get()
     Satchel.update(
         inc__resource__ore=quantity,
-        set__updated=datetime.datetime.utcnow()
+        set__updated=utcnow()
     )
     Satchel.reload()
 

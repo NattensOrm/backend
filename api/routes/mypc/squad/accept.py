@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Creature import CreatureSquad
+from mongo.utils import JSON_OPTIONS, utcnow
 
 from utils.decorators import (
     check_creature_exists,
@@ -40,7 +40,7 @@ def squad_accept(creatureuuid, squaduuid):
             id=g.Squad.id,
             rank='Member',
         )
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f'{g.h} Squad Query KO [{e}]'
@@ -57,7 +57,7 @@ def squad_accept(creatureuuid, squaduuid):
     # Broadcast Channel
     cput(PS_BROADCAST, {
         "ciphered": False,
-        "payload": g.Squad.to_json(),
+        "payload": g.Squad.to_json(json_options=JSON_OPTIONS),
         "route": 'mypc/{id1}/squad',
         "scope": 'squad'})
     # Discord Queue

@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Item import ItemDocument
+from mongo.utils import utcnow
 
 from utils.decorators import (
     check_creature_exists,
@@ -30,7 +30,7 @@ def offset(creatureuuid, itemuuid, offsetx=None, offsety=None):
     try:
         g.Item.offsetx = offsetx
         g.Item.offsety = offsety
-        g.Item.updated = datetime.datetime.utcnow()
+        g.Item.updated = utcnow()
         g.Item.save()
     except Exception as e:
         msg = f'{g.h} Offset Query KO [{e}]'

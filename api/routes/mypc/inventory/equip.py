@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Creature import CreatureSlot, CreatureSlots
+from mongo.utils import utcnow
 
 from utils.decorators import (
     check_creature_exists,
@@ -278,7 +278,7 @@ def equip(creatureuuid, type, slotname, itemuuid):
             }
         ), 200
     else:
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
 
     # Here everything should be OK with the equip

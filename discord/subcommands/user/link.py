@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from loguru import logger
 from discord.commands import option
 
 from mongo.models.User import UserDocument, UserDiscord
+from mongo.utils import utcnow
 from utils.redis import (
     LINK_ATTEMPTS_MAX,
     LINK_ATTEMPTS_WINDOW,
@@ -180,7 +180,7 @@ def link(group_user, bot):
         try:
             UserDocument.objects(pk=User.pk).update_one(
                 set__discord=UserDiscord(name=ctx.author.name, ack=True),
-                set__updated=datetime.datetime.utcnow(),
+                set__updated=utcnow(),
                 )
         except Exception as e:
             logger.error(f'{h} └──> MongoDB Update KO [{e}]')

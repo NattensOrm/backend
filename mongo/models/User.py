@@ -1,4 +1,3 @@
-import datetime
 import uuid
 
 from mongoengine import (
@@ -15,6 +14,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: user
@@ -48,11 +49,11 @@ class UserDocument(Document):
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     active = BooleanField(required=True, default=False)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     discord = EmbeddedDocumentField(UserDiscord, required=True)
     hash = StringField(required=True)
     name = StringField(required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'users',

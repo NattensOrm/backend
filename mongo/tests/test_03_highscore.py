@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import os
 import sys
 import uuid
@@ -16,6 +15,7 @@ from mongo.models.Highscore import (  # noqa: E402
     HighscoreInternalGenericResource,
     HighscoreProfession,
 )
+from mongo.utils import utcnow  # noqa: E402
 
 CREATURE_NAME = 'PyTest Creature'
 CREATURE_ID = str(uuid.uuid3(uuid.NAMESPACE_DNS, CREATURE_NAME))
@@ -51,7 +51,7 @@ def test_mongodb_highscore_new():
 
     highscores_update_query = {
         'inc__general__kill': 10,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     newHighscore.update(**highscores_update_query)
 

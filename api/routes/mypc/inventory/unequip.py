@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
@@ -16,6 +15,7 @@ from utils.decorators import (
 from utils.pa import instance_tick
 from utils.redis import r, get_pa
 from utils.resolver import notify_gear_changed
+from mongo.utils import utcnow
 
 #
 # Inventory.unequip specifics
@@ -77,7 +77,7 @@ def unequip(creatureuuid, type, slotname, itemuuid):
             }
         ), 200
     else:
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
 
     # We send in pubsub channel for WS

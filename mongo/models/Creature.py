@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 CREATURE_RARITY = [
     'Small',
@@ -166,7 +167,7 @@ class CreatureDocument(Document):
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     account = UUIDField(binary=False, default=None)
     active = BooleanField(required=True, default=False)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     diplo = StringField(required=True, choices=['neutral', 'enemy'], default='neutral')
     gender = BooleanField(required=True)
     hp = EmbeddedDocumentField(CreatureHP, required=True)
@@ -180,7 +181,7 @@ class CreatureDocument(Document):
     squad = EmbeddedDocumentField(CreatureSquad, required=True)
     stats = EmbeddedDocumentField(CreatureStats, required=True)
     targeted_by = StringField(default=None)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
     x = IntField(default=None)
     xp = IntField(required=True, default=0)
     y = IntField(default=None)

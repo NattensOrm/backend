@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from discord.commands import option
@@ -9,6 +8,7 @@ from loguru import logger
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Item import ItemDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from subcommands.singouin._autocomplete import get_mysingouins_list
 from subcommands.bazaar._autocomplete import get_singouin_saleable_item_list
@@ -102,7 +102,7 @@ def item(group_bazaar, bot):
             # We do the financial transaction, atomically
             credited = SatchelDocument.objects(_id=singouin_uuid).update_one(
                 inc__currency__banana=item_price,
-                set__updated=datetime.datetime.utcnow(),
+                set__updated=utcnow(),
                 )
             if credited == 0:
                 raise SatchelDocument.DoesNotExist(f'Satchel {singouin_uuid} NotFound')
@@ -111,7 +111,7 @@ def item(group_bazaar, bot):
             Item.bearer = "00000000-cafe-cafe-cafe-000000000000"
             Item.bound = False
             Item.state = 100
-            Item.updated = datetime.datetime.utcnow()
+            Item.updated = utcnow()
             Item.save()
             # Highscore
             Highscore.internal.item.sold += 1

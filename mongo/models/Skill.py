@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: skills
@@ -56,7 +57,7 @@ class SkillDocument(Document):
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     skills = ListField(EmbeddedDocumentField(SkillEntry), default=list)
     loadout = ListField(StringField(), default=list)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'skills',

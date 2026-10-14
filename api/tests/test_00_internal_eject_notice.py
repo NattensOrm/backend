@@ -176,7 +176,7 @@ def eject(route, monkeypatch):
             json={
                 "reason": reason,
                 "by": None,
-                "at": datetime.datetime.utcnow().isoformat(),
+                "at": datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat(),
                 "requestId": str(uuid.uuid4()),
                 },
             )

@@ -1,7 +1,7 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import importlib.util
+import datetime
 import json
 import os
 import sys
@@ -122,7 +122,7 @@ def _document(events, store, _id, instance, account=None, delete_error=None):
         id=_id,
         account=account,
         instance=instance,
-        to_json=lambda: json.dumps({"_id": str(_id), "name": 'Monster'}),
+        to_json=lambda json_options=None: json.dumps({"_id": str(_id), "name": 'Monster'}),
         delete=delete,
         )
 
@@ -141,7 +141,7 @@ def world(modules, monkeypatch):
     instances = {
         INSTANCE_ID: types.SimpleNamespace(
             id=INSTANCE_ID,
-            to_json=lambda: json.dumps({"_id": str(INSTANCE_ID)}),
+            to_json=lambda json_options=None: json.dumps({"_id": str(INSTANCE_ID)}),
             ),
         }
     monkeypatch.setattr(route, 'CreatureDocument', types.SimpleNamespace(objects=_Collection(creatures)))  # noqa: E501
@@ -179,7 +179,7 @@ def world(modules, monkeypatch):
             body = {
                 "reason": 'death',
                 "by": str(uuid.uuid4()),
-                "at": datetime.datetime.utcnow().isoformat(),
+                "at": datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat(),
                 "requestId": str(uuid.uuid4()),
                 }
         return client.post(f'/remove/{instanceid}/{creatureid}', headers=headers, json=body)
@@ -424,7 +424,7 @@ def test_instance_close_publishes_kill_on_env_channel(modules, monkeypatch):
 
     monster = types.SimpleNamespace(
         id=MONSTER_ID,
-        to_json=lambda: json.dumps({"_id": str(MONSTER_ID)}),
+        to_json=lambda json_options=None: json.dumps({"_id": str(MONSTER_ID)}),
         delete=lambda: events.append(('delete', MONSTER_ID)),
         )
     # leave_instance() filters twice: the players (count 1, the leaver is the
@@ -443,7 +443,7 @@ def test_instance_close_publishes_kill_on_env_channel(modules, monkeypatch):
     leaver = types.SimpleNamespace(id=SINGOUIN_ID, save=lambda: None)
     instance = types.SimpleNamespace(
         id=INSTANCE_ID,
-        to_json=lambda: json.dumps({"_id": str(INSTANCE_ID)}),
+        to_json=lambda json_options=None: json.dumps({"_id": str(INSTANCE_ID)}),
         delete=lambda: events.append(('delete', INSTANCE_ID)),
         )
 

@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     # StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: satchel
@@ -126,7 +127,7 @@ class SatchelDocument(Document):
     currency = EmbeddedDocumentField(SatchelCurrency, required=True)
     resource = EmbeddedDocumentField(SatchelResource, required=True)
     shard = EmbeddedDocumentField(SatchelShard, required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'satchels',
