@@ -24,7 +24,6 @@ from variables import (
 def sell(group_auction):
     @group_auction.command(
         description='[@Singouins role] Sell an item in the Auction House',
-        default_permission=False,
         name='sell',
         )
     @option(

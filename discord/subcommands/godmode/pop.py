@@ -36,7 +36,6 @@ from variables import (
 def pop(group_godmode):
     @group_godmode.command(
         description='[@Team role] Spawn a Monster',
-        default_permission=False,
         name='pop',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

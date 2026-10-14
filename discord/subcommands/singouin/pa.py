@@ -21,7 +21,6 @@ def pa(group_singouin):
             '[@Singouins role] '
             'Display your Singouin Action Points (PA)'
             ),
-        default_permission=False,
         name='pa',
         )
     @commands.has_any_role('Singouins')

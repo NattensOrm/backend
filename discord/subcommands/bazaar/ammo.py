@@ -17,7 +17,6 @@ from variables import AMMUNITIONS, RESOURCES_DIR
 def ammo(group_bazaar, bot):
     @group_bazaar.command(
         description='[@Singouins role] Buy/Sell ammunitions to the Bazaar',
-        default_permission=False,
         name='ammo',
         )
     @option(

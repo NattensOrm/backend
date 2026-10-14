@@ -60,7 +60,6 @@ def equipment(group_singouin):
             '[@Singouins role] '
             'Display your Singouin Equipped items'
             ),
-        default_permission=False,
         name='equipment',
         )
     @commands.has_any_role('Singouins')

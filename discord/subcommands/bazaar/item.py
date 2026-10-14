@@ -25,7 +25,6 @@ from variables import (
 def item(group_bazaar, bot):
     @group_bazaar.command(
         description='[@Singouins role] Buy/Sell items to the Bazaar',
-        default_permission=False,
         name='item',
         )
     @option(

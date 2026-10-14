@@ -18,7 +18,6 @@ from variables import env_vars, item_types_discord, rarity_item_types_discord
 def remove(group_auction):
     @group_auction.command(
         description='[@Singouins role] Remove an item from the Auction House',
-        default_permission=False,
         name='remove',
         )
     @option(

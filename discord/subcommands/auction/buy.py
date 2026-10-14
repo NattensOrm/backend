@@ -13,7 +13,6 @@ from subcommands.singouin._autocomplete import get_mysingouins_list
 def buy(group_auction):
     @group_auction.command(
         description='[@Singouins role] Buy an item in the Auction House',
-        default_permission=False,
         name='buy',
         )
     @option(

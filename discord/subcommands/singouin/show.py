@@ -15,7 +15,6 @@ def show(group_singouin, bot):
             '[@Singouins role] '
             'Show your Singouin(s) informations'
             ),
-        default_permission=False,
         name='show',
         )
     @commands.has_any_role('Singouins')

@@ -17,7 +17,6 @@ from subcommands.singouin._tools import creature_sprite
 def stats(group_singouin, bot):
     @group_singouin.command(
         description='[@Singouins role] Display your Singouin Stats',
-        default_permission=False,
         name='stats',
         )
     @commands.has_any_role('Singouins')

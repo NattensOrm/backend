@@ -16,7 +16,6 @@ MEMBER_RANKS = ('Leader', 'Member')
 def grant(group_user, bot):
     @group_user.command(
         description='[@everyone] Update your Discord roles (Squad/Korp)',
-        default_permission=False,
         name='grant',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

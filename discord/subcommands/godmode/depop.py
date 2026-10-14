@@ -23,7 +23,6 @@ from variables import (
 def depop(group_godmode):
     @group_godmode.command(
         description='[@Team role] Kill a Monster',
-        default_permission=False,
         name='depop',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

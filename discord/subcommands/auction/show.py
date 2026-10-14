@@ -16,7 +16,6 @@ from variables import item_types_discord as itd, metaIndexed, rarity_item_types_
 def show(group_auction, bot):
     @group_auction.command(
         description='[@Singouins role] Show your items in the Auction House',
-        default_permission=False,
         name='show',
         )
     @option(

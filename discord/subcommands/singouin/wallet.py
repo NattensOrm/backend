@@ -35,7 +35,6 @@ def wallet(group_singouin, bot):
             '[@Singouins role] '
             'Display your Singouin Wallet'
             ),
-        default_permission=False,
         name='wallet',
         )
     @commands.has_any_role('Singouins')
