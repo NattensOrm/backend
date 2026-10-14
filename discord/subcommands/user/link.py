@@ -4,6 +4,7 @@ import discord
 
 from loguru import logger
 from discord.commands import option
+from mongoengine.errors import NotUniqueError
 
 from mongo.models.User import UserDocument, UserDiscord
 from mongo.utils import utcnow
@@ -123,7 +124,7 @@ def link(group_user, bot):
         try:
             User = UserDocument.objects(pk=useruuid).first()
             Linked = UserDocument.objects(
-                discord__name=ctx.author.name,
+                discord__id=str(ctx.author.id),
                 pk__ne=useruuid,
                 ).first()
         except Exception as e:
@@ -149,7 +150,7 @@ def link(group_user, bot):
                 )
             return
 
-        if User.discord.name == ctx.author.name:
+        if User.discord.id == str(ctx.author.id):
             logger.debug(f'{h} └──> Link already done')
             await ctx.respond(
                 embed=discord.Embed(
@@ -160,7 +161,7 @@ def link(group_user, bot):
                 )
             return
 
-        # One Discord user <-> one User: every discord__name lookup relies on it
+        # One Discord user <-> one User (unique index on discord.id)
         if Linked is not None:
             logger.warning(f'{h} └──> Discord user already linked to another User')
             await ctx.respond(
@@ -174,14 +175,25 @@ def link(group_user, bot):
 
         # The code proves the account ownership: a previous link to another
         # Discord user (stale, or hijacked) is replaced
-        if User.discord.name:
+        if User.discord.id:
             logger.info(f'{h} ├──> Replacing a previous Discord link')
 
         try:
             UserDocument.objects(pk=User.pk).update_one(
-                set__discord=UserDiscord(name=ctx.author.name, ack=True),
+                set__discord=UserDiscord(id=str(ctx.author.id), name=ctx.author.name),
                 set__updated=utcnow(),
                 )
+        except NotUniqueError:
+            # Linked to another User in the meantime (concurrent /user link)
+            logger.warning(f'{h} └──> Discord user already linked to another User')
+            await ctx.respond(
+                embed=discord.Embed(
+                    description='Your Discord user is already linked to another Singouin account',
+                    colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
         except Exception as e:
             logger.error(f'{h} └──> MongoDB Update KO [{e}]')
             await ctx.respond(

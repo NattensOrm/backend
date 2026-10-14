@@ -73,7 +73,7 @@ def test_singouins_auth_infos(jwt_header):
     assert user['name'] == USER_NAME
     assert 'hash' not in user
     # Fresh account: not linked to Discord
-    assert user['discord'] == {'ack': False}
+    assert user['discord'] == {}
 
 
 def test_singouins_auth_refresh(jwt_header):

@@ -53,15 +53,15 @@ async def check(bot: discord.Client) -> None:
                         if not User:
                             logger.warning("UserDocument not found.")
                             continue
-                        if not User.discord.name:
+                        if not User.discord.id:
                             logger.warning("User not linked.")
                             continue
 
                     # Loop through all guilds the bot is in
                     # It should be only one, but ...
                     for guild in bot.guilds:
-                        # Search for the user in the guild
-                        member = discord.utils.get(guild.members, name=User.discord.name)
+                        # Search for the user in the guild, by Discord id
+                        member = guild.get_member(int(User.discord.id))
 
                         if not member:
                             logger.warning("Member not found in this guild.")

@@ -94,7 +94,7 @@ def discord_unlink():
         logger.error(msg)
         return jsonify({"msg": msg}), 500
 
-    if User.discord.name:
+    if User.discord.id:
         msg = f'Discord unlink OK (username:{username})'
     else:
         msg = f'Discord unlink OK (username:{username}) [was not linked]'

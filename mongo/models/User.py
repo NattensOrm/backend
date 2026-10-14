@@ -27,10 +27,14 @@ class UserDiscord(EmbeddedDocument):
     Define the embedded document for: User.discord
 
     Fields:
-    - ack   (IntField)
-    - name  (StringField)
+    - id    (StringField) Discord user id (snowflake): the identity, never
+                          changes. A str: 64 bits don't fit a JS Number
+    - name  (StringField) Discord username: display only, refreshed by the
+                          bot - users can rename, never look a User up by it
+
+    Unlinked: both None (stored as an empty discord: {}).
     """
-    ack = BooleanField(default=False)
+    id = StringField(default=None)
     name = StringField(default=None)
 
 
@@ -57,6 +61,14 @@ class UserDocument(Document):
 
     meta = {
         'collection': 'users',
-        'indexes': [],
+        'indexes': [
+            # One Discord user <-> one User, enforced by Mongo. Partial:
+            # unlinked Users have no discord.id and don't count
+            {
+                'fields': ['discord.id'],
+                'unique': True,
+                'partialFilterExpression': {'discord.id': {'$type': 'string'}},
+            },
+        ],
         'uuid_representation': 'standard'
         }

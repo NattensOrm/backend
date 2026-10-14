@@ -95,9 +95,7 @@ def log_messages():
 
 
 def _ctx(make_ctx, *, author_name='tester', author_id=1234, channel_type=discord.ChannelType.private):  # noqa: E501
-    ctx = make_ctx(author_name=author_name, channel_type=channel_type)
-    ctx.author.id = author_id
-    return ctx
+    return make_ctx(author_name=author_name, author_id=author_id, channel_type=channel_type)
 
 
 def _description(ctx):
@@ -110,7 +108,7 @@ def _description(ctx):
 
 @pytest.mark.parametrize('channel_type', [discord.ChannelType.text, discord.ChannelType.private])
 async def test_link_success_in_guild_channel_and_dm(link_callback, make_ctx, make_user, issue_code, fake_redis, channel_type):  # noqa: E501
-    user = make_user(name='fresh@example.com', discord={'name': None, 'ack': False})
+    user = make_user(name='fresh@example.com', discord={})
     code = issue_code(user)
 
     ctx = _ctx(make_ctx, author_name='new_discord_user', channel_type=channel_type)
@@ -122,14 +120,14 @@ async def test_link_success_in_guild_channel_and_dm(link_callback, make_ctx, mak
     assert 'link :ok:' in _description(ctx)
     user.reload()
     assert user.discord.name == 'new_discord_user'
-    assert user.discord.ack is True
+    assert user.discord.id == '1234'
     # Single use: consumed
     assert fake_redis.get(CODE_KEY.format(code)) is None
 
 
 @pytest.mark.parametrize('typed', ['K7Q4MZ2X', 'k7q4mz2x', ' K7Q4-MZ2X ', 'K7Q4 MZ2X'])
 async def test_link_code_case_dash_and_spaces_dont_matter(link_callback, make_ctx, make_user, issue_code, typed):  # noqa: E501
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
     issue_code(user)
 
     ctx = _ctx(make_ctx)
@@ -141,7 +139,7 @@ async def test_link_code_case_dash_and_spaces_dont_matter(link_callback, make_ct
 
 
 async def test_link_code_is_single_use(link_callback, make_ctx, make_user, issue_code):
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
     issue_code(user)
     await link_callback(_ctx(make_ctx, author_name='first'), CODE)
 
@@ -150,11 +148,12 @@ async def test_link_code_is_single_use(link_callback, make_ctx, make_user, issue
 
     assert 'already used' in _description(ctx)
     user.reload()
+    assert user.discord.id == '1234'
     assert user.discord.name == 'first'
 
 
 async def test_link_unknown_code_leaves_db_untouched(link_callback, make_ctx, make_user, fake_redis):  # noqa: E501
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
 
     ctx = _ctx(make_ctx)
     await link_callback(ctx, CODE)
@@ -162,7 +161,7 @@ async def test_link_unknown_code_leaves_db_untouched(link_callback, make_ctx, ma
     assert ctx.respond.call_count == 1
     assert 'Unknown, expired or already used' in _description(ctx)
     user.reload()
-    assert user.discord.name is None
+    assert user.discord.id is None
 
 
 @pytest.mark.parametrize('typed', ['K7Q4', 'K7Q4MZ2XX', 'K0Q4MZ2X', 'someone@example.com'])
@@ -178,7 +177,7 @@ async def test_link_malformed_code_is_refused_without_lookup(link_callback, make
 
 async def test_link_attempts_are_limited_per_discord_user(link_callback, make_ctx, make_user, issue_code, fake_redis):  # noqa: E501
     # Brute-force guard: past the limit, even a valid code is not looked up
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
     for _ in range(LINK_ATTEMPTS_MAX):
         await link_callback(_ctx(make_ctx), 'AAAAAAAA')
     code = issue_code(user)
@@ -188,7 +187,7 @@ async def test_link_attempts_are_limited_per_discord_user(link_callback, make_ct
 
     assert 'Too many attempts' in _description(ctx)
     user.reload()
-    assert user.discord.name is None
+    assert user.discord.id is None
     assert fake_redis.get(CODE_KEY.format(code)) is not None
     # The window expires: the counter always has a TTL
     assert fake_redis.ttl(ATTEMPTS_KEY.format(1234)) == LINK_ATTEMPTS_WINDOW
@@ -210,7 +209,7 @@ def test_link_attempts_counter_gets_its_ttl_back(fake_redis):
 
 
 async def test_link_already_linked_to_caller_is_idempotent(link_callback, make_ctx, make_user, issue_code):  # noqa: E501
-    user = make_user(discord={'name': 'tester', 'ack': True})
+    user = make_user(discord={'id': '1234', 'name': 'tester'})
     issue_code(user)
 
     ctx = _ctx(make_ctx, author_name='tester')
@@ -224,7 +223,7 @@ async def test_link_already_linked_to_caller_is_idempotent(link_callback, make_c
 async def test_link_replaces_link_to_another_discord_user(link_callback, make_ctx, make_user, issue_code):  # noqa: E501
     # The code proves the ownership: a hijacked (or stale) link is replaced,
     # that's how a player takes their account back
-    user = make_user(discord={'name': 'hijacker', 'ack': True})
+    user = make_user(discord={'id': '9999', 'name': 'hijacker'})
     issue_code(user)
 
     ctx = _ctx(make_ctx, author_name='owner')
@@ -232,14 +231,15 @@ async def test_link_replaces_link_to_another_discord_user(link_callback, make_ct
 
     assert 'link :ok:' in _description(ctx)
     user.reload()
+    assert user.discord.id == '1234'
     assert user.discord.name == 'owner'
 
 
 async def test_link_caller_already_linked_to_another_user_is_refused(link_callback, make_ctx, make_user, issue_code):  # noqa: E501
-    # A 2nd link would make the Discord name match 2 Users, which breaks
-    # every discord__name lookup (/user grant, /singouin ...)
-    make_user(name='first@example.com', discord={'name': 'tester', 'ack': True})
-    second = make_user(name='second@example.com', discord={'name': None, 'ack': False})
+    # One Discord user <-> one User: every lookup by Discord id relies on it
+    # (and the unique index on discord.id enforces it)
+    make_user(name='first@example.com', discord={'id': '1234', 'name': 'tester'})
+    second = make_user(name='second@example.com', discord={})
     issue_code(second)
 
     ctx = _ctx(make_ctx, author_name='tester')
@@ -247,11 +247,11 @@ async def test_link_caller_already_linked_to_another_user_is_refused(link_callba
 
     assert 'another Singouin account' in _description(ctx)
     second.reload()
-    assert second.discord.name is None
+    assert second.discord.id is None
 
 
 async def test_link_code_of_deleted_user(link_callback, make_ctx, make_user, issue_code):
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
     issue_code(user)
     user.delete()
 
@@ -286,7 +286,7 @@ async def test_link_query_failure_responds_once(link_callback, make_ctx, make_us
 
 
 async def test_link_update_failure_responds_once(link_callback, make_ctx, make_user, issue_code):
-    user = make_user(discord={'name': None, 'ack': False})
+    user = make_user(discord={})
     issue_code(user)
 
     ctx = _ctx(make_ctx)
@@ -296,14 +296,44 @@ async def test_link_update_failure_responds_once(link_callback, make_ctx, make_u
     assert ctx.respond.call_count == 1
     assert 'link KO' in _description(ctx)
     user.reload()
-    assert user.discord.name is None
+    assert user.discord.id is None
 
 
 async def test_link_never_logs_the_code(link_callback, make_ctx, make_user, issue_code, log_messages):  # noqa: E501
-    issue_code(make_user(discord={'name': None, 'ack': False}))
+    issue_code(make_user(discord={}))
 
     await link_callback(_ctx(make_ctx), 'K7Q4-MZ2X')
     await link_callback(_ctx(make_ctx), 'AAAA-AAAA')
 
     assert log_messages
     assert not [m for m in log_messages if 'K7Q4' in m or 'AAAA' in m]
+
+
+async def test_link_is_by_discord_id_not_name(link_callback, make_ctx, make_user, issue_code):
+    # Same Discord id, renamed since: still the same link, name refreshed
+    user = make_user(discord={'id': '1234', 'name': 'old_name'})
+    issue_code(user)
+
+    ctx = _ctx(make_ctx, author_name='new_name')
+    await link_callback(ctx, CODE)
+
+    assert 'already done' in _description(ctx)
+
+
+async def test_link_concurrent_link_of_same_discord_user_is_refused(link_callback, make_ctx, make_user, issue_code, hook_query):  # noqa: E501
+    # The same Discord user links another User between the checks and the
+    # write: the unique index on discord.id refuses the 2nd link
+    target = make_user(name='target@example.com', discord={})
+    issue_code(target)
+
+    def concurrent_link():
+        make_user(name='other@example.com', discord={'id': '1234', 'name': 'tester'})
+
+    ctx = _ctx(make_ctx)
+    # objects() calls: 1. by code's User id, 2. by Discord id, 3. the update
+    with hook_query(UserDocument, concurrent_link, before_call=3):
+        await link_callback(ctx, CODE)
+
+    assert 'another Singouin account' in _description(ctx)
+    target.reload()
+    assert target.discord.id is None
