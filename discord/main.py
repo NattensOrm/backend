@@ -9,7 +9,6 @@ from loguru import logger
 from subcommands import (
     auction,
     bazaar,
-    infra,
     godmode,
     singouin,
     user,
@@ -117,21 +116,6 @@ else:
     godmode.pop(group_godmode)
     godmode.take(group_godmode)
     godmode.reset(group_godmode)
-    logger.debug(f'[{group_name}] Commands OK')
-#
-# /infra Commands (for @Admins)
-#
-try:
-    group_name     = 'infra'
-    group_admin = bot.create_group(
-        description="Commands related to Infrastructure management",
-        name=group_name,
-        )
-except Exception as e:
-    logger.error(f'[{group_name}] Command Group KO [{e}]')
-else:
-    logger.debug(f'[{group_name}] Command Group OK')
-    infra.backup(group_admin)
     logger.debug(f'[{group_name}] Commands OK')
 #
 # /mysingouin Commands (for @Singouins)

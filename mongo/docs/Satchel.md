@@ -5,14 +5,17 @@
 ├── _id (UUIDField)
 ├── ammo
 │   ├── arrow (IntField)
+│   ├── axe (IntField)
 │   ├── bolt (IntField)
 │   ├── cal22 (IntField)
 │   ├── cal223 (IntField)
 │   ├── cal311 (IntField)
 │   ├── cal50 (IntField)
 │   ├── cal55 (IntField)
+│   ├── cocktail (IntField)
 │   ├── fuel (IntField)
 │   ├── grenade (IntField)
+│   ├── knife (IntField)
 │   ├── rocket (IntField)
 │   └── shell (IntField)
 ├── currency

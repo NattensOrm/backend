@@ -27,8 +27,9 @@ from utils.decorators import (
     check_creature_exists,
     check_is_json,
     )
+from utils.discord import discord_scopes
 from utils.redis import cput, qput
-from variables import metaNames, rarity_array, YQ_DISCORD
+from variables import metaIndexed, rarity_array, YQ_DISCORD
 
 
 class AddInstanceSchema(BaseModel):
@@ -112,11 +113,7 @@ def add(creatureuuid):
 
     # Everything went well, creation DONE
     # We put the info in queue for Discord
-    scopes = []
-    if hasattr(g.Creature.korp, 'id'):
-        scopes.append(f'Korp-{g.Creature.korp.id}')
-    if hasattr(g.Creature.korp, 'id'):
-        scopes.append(f'Squad-{g.Creature.squad.id}')
+    scopes = discord_scopes(g.Creature)
     for scope in scopes:
         # Discord Queue
         qput(YQ_DISCORD, {
@@ -142,7 +139,7 @@ def add(creatureuuid):
                 y = randint(1, Map.data['height'])
 
                 # We grab the race wanted from metaRaces
-                metaRace = metaNames['race'][raceid - 1]
+                metaRace = metaIndexed['race'][raceid]
 
                 newMonster = CreatureDocument(
                     _id=uuid.uuid4(),
@@ -154,7 +151,7 @@ def add(creatureuuid):
                         ),
                     instance=newInstance.id,
                     korp=CreatureKorp(),
-                    name=metaNames['race'][raceid]['name'],
+                    name=metaRace['name'],
                     race=raceid,
                     rarity=rarity,
                     squad=CreatureSquad(),
