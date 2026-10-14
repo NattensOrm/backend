@@ -18,6 +18,7 @@ auth_bp = APIBlueprint(
 # first, then import the modules that decorate routes onto it).
 from . import confirm  # noqa: E402,F401
 from . import delete  # noqa: E402,F401
+from . import discord_link  # noqa: E402,F401
 from . import forgot_password  # noqa: E402,F401
 from . import infos  # noqa: E402,F401
 from . import login  # noqa: E402,F401

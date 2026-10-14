@@ -15,25 +15,12 @@ MONGO_USER = os.environ.get("MONGO_USER", 'singouins')
 username = urllib.parse.quote_plus(MONGO_USER)
 password = urllib.parse.quote_plus(MONGO_PASS)
 
-if os.environ.get("CI"):
-    # Here we are inside GitHub CI process
-    # And we don't use replicas
-    MONGO_CONN = 'mongodb'
-    MONGO_REPL = ''
-    MONGO_STLS = ''
-else:
-    MONGO_CONN = 'mongodb+srv'
-    MONGO_REPL = '&replicaSet=replicaset'
-    MONGO_STLS = '&tls=true'
-
-MONGO_URI = '%s://%s:%s@%s/%s?authSource=admin%s%s' % (
-    MONGO_CONN,
+# Single-node MongoDB container (prod & CI): no SRV, no replicaSet, no TLS
+MONGO_URI = 'mongodb://%s:%s@%s/%s?authSource=admin' % (
     username,
     password,
     MONGO_HOST,
     MONGO_BASE,
-    MONGO_REPL,
-    MONGO_STLS,
     )
 
 

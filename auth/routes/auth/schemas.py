@@ -29,3 +29,9 @@ class ValidationErrorResponse(BaseModel):
     success: bool
     msg: str
     payload: list
+
+
+class DiscordLinkCodeResponse(BaseModel):
+    msg: str
+    code: str
+    ttl: int

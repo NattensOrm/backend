@@ -29,7 +29,7 @@ from utils.decorators import (
     )
 from utils.discord import discord_scopes
 from utils.redis import cput, qput
-from variables import metaNames, rarity_array, YQ_DISCORD
+from variables import metaIndexed, rarity_array, YQ_DISCORD
 
 
 class AddInstanceSchema(BaseModel):
@@ -139,7 +139,7 @@ def add(creatureuuid):
                 y = randint(1, Map.data['height'])
 
                 # We grab the race wanted from metaRaces
-                metaRace = metaNames['race'][raceid - 1]
+                metaRace = metaIndexed['race'][raceid]
 
                 newMonster = CreatureDocument(
                     _id=uuid.uuid4(),
@@ -151,7 +151,7 @@ def add(creatureuuid):
                         ),
                     instance=newInstance.id,
                     korp=CreatureKorp(),
-                    name=metaNames['race'][raceid]['name'],
+                    name=metaRace['name'],
                     race=raceid,
                     rarity=rarity,
                     squad=CreatureSquad(),
