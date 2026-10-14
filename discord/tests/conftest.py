@@ -129,7 +129,7 @@ def make_ctx():
     Real pycord objects need a live gateway connection to construct, so
     this only fills in what the command callbacks actually touch:
     ctx.channel.name/type, ctx.author.*, ctx.guild.roles, and the async
-    ctx.respond()/ctx.author.add_roles()/ctx.author.send() calls.
+    ctx.defer()/ctx.respond()/ctx.author.add_roles()/ctx.author.send() calls.
     """
     def _make_ctx(*, author_name='tester', channel_name='general', channel_type=None, guild_roles=None):  # noqa: E501
         roles = list(guild_roles or [])
@@ -142,6 +142,7 @@ def make_ctx():
         ctx.guild.roles = roles
         ctx.author.add_roles = AsyncMock()
         ctx.author.send = AsyncMock()
+        ctx.defer = AsyncMock()
         ctx.respond = AsyncMock()
         return ctx
     return _make_ctx
