@@ -33,7 +33,8 @@ else:
 
 # This used to be a symlink to a connector shared with api/auth
 # (_redis/redis.py) - now a real, trimmed-down file with only what discord
-# actually calls: get_pa (read-only PA checks) and cput (pub/sub). No
+# actually calls: get_pa (read-only PA checks), cput (pub/sub) and the
+# Discord link code helpers (bottom of the file). No
 # consume_pa, qput, or str2typed here - discord doesn't consume PA, and it
 # consumes queues via yarqueue directly (see subtasks/yqueue.py) rather
 # than through this module's producer-side qput helper.
@@ -106,3 +107,52 @@ def cput(channel: str, msg: dict) -> None:
         logger.error(msg)
     else:
         logger.trace(f'Pubsub PUBLISH OK (channel:{channel})')
+
+
+# Discord link codes: issued by auth (POST /discord/link, see
+# auth/utils/token.py's generate_discord_link_code()) to a logged-in User,
+# consumed here by /user link. Same key name on both sides - keep in sync.
+LINK_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # No 0/O, 1/I
+LINK_CODE_LENGTH = 8
+# Brute-force guard: attempts allowed per Discord user, per window
+LINK_ATTEMPTS_MAX = 5
+LINK_ATTEMPTS_WINDOW = 600  # 10 minutes, in seconds
+
+
+def link_code_consume(code: str) -> str | None:
+    """
+    Consumes a Discord link code: it can be used once only.
+
+    :param code: The normalized code (LINK_CODE_LENGTH chars, no dash).
+
+    :return: The UUID (str) of the User the code was issued to, or None if
+             the code is unknown, expired or already used.
+    """
+    key = f"{env_vars['API_ENV']}:discord:link_code:{code}"
+    # MULTI/EXEC: two concurrent callers can't both get the User
+    pipe = r.pipeline(transaction=True)
+    pipe.get(key)
+    pipe.delete(key)
+    useruuid, _ = pipe.execute()
+    return useruuid.decode() if useruuid is not None else None
+
+
+def link_attempts_incr(discordid: int) -> int:
+    """
+    Counts a /user link attempt of a Discord user, in a window of
+    LINK_ATTEMPTS_WINDOW seconds starting at its first attempt.
+
+    :param discordid: The Discord user id (stable, unlike the name).
+
+    :return: The number of attempts in the current window, this one included.
+    """
+    key = f"{env_vars['API_ENV']}:discord:link_attempts:{discordid}"
+    pipe = r.pipeline(transaction=True)
+    pipe.incr(key)
+    pipe.ttl(key)
+    attempts, ttl = pipe.execute()
+    # -1: no expiry yet (first attempt, or a previous EXPIRE got lost),
+    # never leave the counter without one or the user is locked out for good
+    if ttl == -1:
+        r.expire(key, LINK_ATTEMPTS_WINDOW)
+    return attempts
