@@ -13,19 +13,13 @@ aiosignal==1.4.0
 attrs==25.3.0
     # via aiohttp
 dnspython==2.9.0
-    # via
-    #   email-validator
-    #   pymongo
-email-validator==2.3.0
-    # via -r requirements.in
+    # via pymongo
 frozenlist==1.7.0
     # via
     #   aiohttp
     #   aiosignal
 idna==3.15
-    # via
-    #   email-validator
-    #   yarl
+    # via yarl
 loguru==0.7.3
     # via -r requirements.in
 mongoengine==0.29.3
