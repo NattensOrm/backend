@@ -42,7 +42,8 @@ def view_get(creatureuuid):
             }
         ), 200
 
-    if g.Creature.squad.id:
+    # A Pending invitee is not a squad member yet: it sees on its own
+    if g.Creature.squad.id and g.Creature.squad.rank != 'Pending':
         logger.trace(f'{g.h} Creature in an Squad:{g.Creature.squad.id}')
         try:
             query = (
@@ -123,7 +124,7 @@ def view_get(creatureuuid):
                 }
             ), 200
     else:
-        # Creature not in a squad
+        # Creature not in a squad (or only Pending in one)
         try:
             range = 4 + round(g.Creature.stats.total.p / 50)
             query_view = (

@@ -26,24 +26,12 @@ MONGO_USER = os.environ.get("MONGO_USER", 'singouins')
 username = urllib.parse.quote_plus(MONGO_USER)
 password = urllib.parse.quote_plus(MONGO_PASS or '')
 
-if os.environ.get("CI"):
-    # Inside GitHub CI / a throwaway single-node Mongo container: no replicas.
-    MONGO_CONN = 'mongodb'
-    MONGO_REPL = ''
-    MONGO_STLS = ''
-else:
-    MONGO_CONN = 'mongodb+srv'
-    MONGO_REPL = '&replicaSet=replicaset'
-    MONGO_STLS = '&tls=true'
-
-MONGO_URI = '%s://%s:%s@%s/%s?authSource=admin%s%s' % (
-    MONGO_CONN,
+# Single-node MongoDB container (prod & CI): no SRV, no replicaSet, no TLS
+MONGO_URI = 'mongodb://%s:%s@%s/%s?authSource=admin' % (
     username,
     password,
     MONGO_HOST,
     MONGO_BASE,
-    MONGO_REPL,
-    MONGO_STLS,
     )
 
 # `variables.py` queries the MetaArmor/MetaWeapon/MetaRace collections at
@@ -141,7 +129,7 @@ def make_ctx():
     Real pycord objects need a live gateway connection to construct, so
     this only fills in what the command callbacks actually touch:
     ctx.channel.name/type, ctx.author.*, ctx.guild.roles, and the async
-    ctx.respond()/ctx.author.add_roles()/ctx.author.send() calls.
+    ctx.defer()/ctx.respond()/ctx.author.add_roles()/ctx.author.send() calls.
     """
     def _make_ctx(*, author_name='tester', channel_name='general', channel_type=None, guild_roles=None):  # noqa: E501
         roles = list(guild_roles or [])
@@ -154,6 +142,7 @@ def make_ctx():
         ctx.guild.roles = roles
         ctx.author.add_roles = AsyncMock()
         ctx.author.send = AsyncMock()
+        ctx.defer = AsyncMock()
         ctx.respond = AsyncMock()
         return ctx
     return _make_ctx

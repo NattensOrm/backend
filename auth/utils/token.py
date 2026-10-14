@@ -68,3 +68,53 @@ def resolve_reset_token(token):
         return None
     r.delete(key)
     return email.decode()
+
+
+# Discord link codes: issued here (POST /discord/link) to a logged-in User,
+# consumed by the discord bot (/user link code:...). Same key names in
+# discord/utils/redis.py's link_code_consume() - keep the two in sync.
+DISCORD_LINK_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # No 0/O, 1/I
+DISCORD_LINK_CODE_LENGTH = 8
+DISCORD_LINK_CODE_DURATION = 600  # 10 minutes, in seconds
+
+
+def _discord_link_code_key(code):
+    return f"{env_vars['API_ENV']}:discord:link_code:{code}"
+
+
+def _current_discord_link_code_key(useruuid):
+    return f"{env_vars['API_ENV']}:discord:current_link_code:{useruuid}"
+
+
+def generate_discord_link_code(useruuid):
+    """ Generate a Redis-backed Discord link code for the User `useruuid`,
+    valid for DISCORD_LINK_CODE_DURATION seconds. Short (typed by hand in
+    Discord), so the bot limits the attempts. Single-use: the bot deletes
+    it on read. A new code revokes the User's previous one, found through
+    the per-User lookup key (see generate_confirmation_token). """
+    useruuid = str(useruuid)
+    while True:
+        code = ''.join(
+            secrets.choice(DISCORD_LINK_CODE_ALPHABET)
+            for _ in range(DISCORD_LINK_CODE_LENGTH)
+            )
+        # NX: never take over a live code of another User (2^40 codes, so
+        # this only loops on an astronomically unlikely collision)
+        if r.set(_discord_link_code_key(code), useruuid, ex=DISCORD_LINK_CODE_DURATION, nx=True):
+            break
+
+    # SET ... GET (Redis >= 6.2): swap in the new code, get the old one back
+    previous = r.set(
+        _current_discord_link_code_key(useruuid), code, ex=DISCORD_LINK_CODE_DURATION, get=True,
+        )
+    if previous is not None:
+        r.delete(_discord_link_code_key(previous.decode()))
+    return code
+
+
+def revoke_discord_link_code(useruuid):
+    """ Revoke the User's pending Discord link code, if any. """
+    # GETDEL (Redis >= 6.2): one shot, a concurrent generate can't slip in
+    code = r.getdel(_current_discord_link_code_key(str(useruuid)))
+    if code is not None:
+        r.delete(_discord_link_code_key(code.decode()))

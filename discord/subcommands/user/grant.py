@@ -26,6 +26,10 @@ def grant(group_user, bot):
         h = f'[#{ctx.channel.name}][{ctx.author.name}]'
         logger.info(f'{h} /{group_user} grant')
 
+        # Mongo queries + Discord role calls can outlast the 3s
+        # interaction deadline: acknowledge first, answer afterwards
+        await ctx.defer(ephemeral=True)
+
         # Get the User
         try:
             User = UserDocument.objects(discord__name=ctx.author.name).get()
@@ -39,19 +43,36 @@ def grant(group_user, bot):
                 ephemeral=True,
                 )
             return
-        except Exception as e:
-            logger.error(f'MongoDB Query KO [{e}]')
-
-        # Get the Singouin role
-        try:
-            singouinrole = discord.utils.get(
-                ctx.author.guild.roles,
-                name='Singouins'
-                )
-        except Exception as e:
+        except UserDocument.MultipleObjectsReturned:
+            logger.error(f'{h} ├──> Discord Name linked to several Users')
             await ctx.respond(
                 embed=discord.Embed(
-                    description=f'Discord get-role:Singouins KO\n[{e}]',
+                    description=f'Discord Name:`{ctx.author.name}` linked to several Users in DB',
+                    colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
+        except Exception as e:
+            logger.error(f'MongoDB Query KO [{e}]')
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=f'MongoDB Query KO\n[{e}]',
+                    colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
+
+        guild = ctx.guild
+
+        # Get the Singouin role
+        singouinrole = discord.utils.get(guild.roles, name='Singouins')
+        if singouinrole is None:
+            logger.error(f'{h} ├──> Role Singouins not found')
+            await ctx.respond(
+                embed=discord.Embed(
+                    description='Discord get-role:Singouins KO (Role not found)',
                     colour=discord.Colour.red(),
                     ),
                 ephemeral=True,
@@ -71,101 +92,66 @@ def grant(group_user, bot):
                 )
             return
 
-        # Apply Squad roles if needed
-        guild = ctx.guild
-
         # Get the Singouin(s)
+        # The QuerySet is lazy: list() runs the query inside the try
         try:
-            Creatures = CreatureDocument.objects(account=User.id)
+            Creatures = list(CreatureDocument.objects(account=User.id))
         except Exception as e:
             logger.error(f'MongoDB Query KO [{e}]')
-        else:
-            if Creatures.count() == 0:
-                msg = f'No Singouins found in DB for `{ctx.author.name}`'
-                logger.warning(msg)
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=f'MongoDB Query KO\n[{e}]',
+                    colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
+
+        if not Creatures:
+            msg = f'No Singouins found in DB for `{ctx.author.name}`'
+            logger.warning(msg)
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=msg,
+                    colour=discord.Colour.orange(),
+                    ),
+                ephemeral=True,
+                )
+            return
+
+        # Squad/Korp roles to add, by name (deduplicated across Creatures)
+        roles = {}
+        # Squad/Korp roles not found in the guild, reported in the final answer
+        missing_roles = []
+        for Creature in Creatures:
+            for kind, membership in (('Korp', Creature.korp), ('Squad', Creature.squad)):
+                # A Pending invitee is not a member yet: no role until it accepts
+                if not membership.id or membership.rank not in MEMBER_RANKS:
+                    continue
+                name = f'{kind}-{membership.id}'
+                if name in roles or name in missing_roles:
+                    continue
+                role = discord.utils.get(guild.roles, name=name)
+                if role is None:
+                    # Role not created yet (subtasks/channels.py): skip it
+                    missing_roles.append(name)
+                    logger.warning(f'{h} ├──> Role {name} not found')
+                elif role not in ctx.author.roles:
+                    roles[name] = role
+
+        # Add the Squad/Korp roles to the user, in one API call
+        if roles:
+            try:
+                await ctx.author.add_roles(*roles.values())
+            except Exception as e:
                 await ctx.respond(
                     embed=discord.Embed(
-                        description=msg,
-                        colour=discord.Colour.orange(),
+                        description=f"Discord add-role:{', '.join(roles)} KO\n[{e}]",
+                        colour=discord.Colour.red(),
                         ),
                     ephemeral=True,
                     )
                 return
-
-        # Squad/Korp roles not found in the guild, reported in the final answer
-        missing_roles = []
-        for Creature in Creatures:
-            # Korp management
-            # A Pending invitee is not a member yet: no role until it accepts
-            if Creature.korp.id and Creature.korp.rank in MEMBER_RANKS:
-                # Get the Korp role
-                try:
-                    korprole = discord.utils.get(
-                        guild.roles,
-                        name=f"Korp-{Creature.korp.id}"
-                        )
-                except Exception as e:
-                    await ctx.respond(
-                        embed=discord.Embed(
-                            description=f"Discord get-role:Korp-{Creature.korp.id} KO\n[{e}]",
-                            colour=discord.Colour.red(),
-                            ),
-                        ephemeral=True,
-                        )
-                    return
-                # Add the Korp role to the user
-                try:
-                    if korprole is None:
-                        # Role not created yet (subtasks/channels.py): skip it
-                        missing_roles.append(f"Korp-{Creature.korp.id}")
-                        logger.warning(f'{h} ├──> Role Korp-{Creature.korp.id} not found')
-                    elif korprole not in ctx.author.roles:
-                        await ctx.author.add_roles(korprole)
-                except Exception as e:
-                    await ctx.respond(
-                        embed=discord.Embed(
-                            description=f"Discord add-role:Korp-{Creature.korp.id} KO\n[{e}]",
-                            colour=discord.Colour.red(),
-                            ),
-                        ephemeral=True,
-                        )
-                    return
-
-            # Squad management
-            # A Pending invitee is not a member yet: no role until it accepts
-            if Creature.squad.id and Creature.squad.rank in MEMBER_RANKS:
-                # Get the Squad role to the user
-                try:
-                    squadrole = discord.utils.get(
-                        guild.roles,
-                        name=f"Squad-{Creature.squad.id}"
-                        )
-                except Exception as e:
-                    await ctx.respond(
-                        embed=discord.Embed(
-                            description=f"Discord get-role:Squad-{Creature.squad.id} KO\n[{e}]",
-                            colour=discord.Colour.red(),
-                            ),
-                        ephemeral=True,
-                        )
-                    return
-                # Add the Squad role to the user
-                try:
-                    if squadrole is None:
-                        # Role not created yet (subtasks/channels.py): skip it
-                        missing_roles.append(f"Squad-{Creature.squad.id}")
-                        logger.warning(f'{h} ├──> Role Squad-{Creature.squad.id} not found')
-                    elif squadrole not in ctx.author.roles:
-                        await ctx.author.add_roles(squadrole)
-                except Exception as e:
-                    await ctx.respond(
-                        embed=discord.Embed(
-                            description=f"Discord add-role:Squad-{Creature.squad.id} KO\n[{e}]",
-                            colour=discord.Colour.red(),
-                            ),
-                        ephemeral=True,
-                        )
-                    return
 
         logger.info(f'{h} ├──> Query OK')
         if missing_roles:
