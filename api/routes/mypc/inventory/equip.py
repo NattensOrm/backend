@@ -21,6 +21,36 @@ from variables import metaIndexed
 #
 # Item metatypes that can be equipped (metaIndexed also holds 'race')
 EQUIPABLE_TYPES = ('armor', 'weapon')
+# Design ruling (2026-10-14): a slot only accepts its own item category.
+# Armour meta 'slot' value -> the Creature slots it may go in
+ARMOR_SLOTS = {
+    'Feet': {'feet'},
+    'Hands': {'hands'},
+    'Head': {'head'},
+    'Legs': {'legs'},
+    'Shoulders': {'shoulders'},
+    'Torso': {'torso'},
+    'Shield': {'lefthand'},
+    }
+WEAPON_SLOTS = {'righthand', 'lefthand', 'holster'}
+# Largest item area (sizex * sizey) the left hand holds. A Shield gets 6
+# (2x2, 2x3); a 2x4 shield is refused on purpose until the slot-perks card
+# ("Main gauche bouclier 2x4" perk) exists.
+LEFTHAND_MAX_AREA = 4
+LEFTHAND_SHIELD_MAX_AREA = 6
+
+
+def allowed_slots(metatype, itemmeta):
+    """
+    Returns the set of Creature slot names the item may be equipped in.
+    An unknown metatype or an armour without a known meta 'slot' gets an
+    empty set, so every slot is refused.
+    """
+    if metatype == 'weapon':
+        return set(WEAPON_SLOTS)
+    if metatype == 'armor':
+        return set(ARMOR_SLOTS.get(itemmeta.get('slot'), set()))
+    return set()
 
 
 #
@@ -67,6 +97,18 @@ def equip(creatureuuid, type, slotname, itemuuid):
                 "payload": None,
             }
         ), 404
+
+    if slotname not in allowed_slots(type, itemmeta):
+        msg = (f"{g.h} Equip KO (slotname:{slotname} not allowed"
+               f" for {type} slot:{itemmeta.get('slot')})")
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 400
 
     sizex, sizey = itemmeta['size'].split("x")
 
@@ -193,7 +235,11 @@ def equip(creatureuuid, type, slotname, itemuuid):
                         metatype=g.Item.metatype,
                         )
         elif slotname == 'lefthand':
-            if int(sizex) * int(sizey) <= 4:
+            if type == 'armor' and itemmeta.get('slot') == 'Shield':
+                max_area = LEFTHAND_SHIELD_MAX_AREA
+            else:
+                max_area = LEFTHAND_MAX_AREA
+            if int(sizex) * int(sizey) <= max_area:
                 # It fits inside the left hand
                 g.Creature.slots.lefthand = CreatureSlot(
                     id=g.Item.id,
