@@ -118,3 +118,17 @@ def test_meta_weapons_dmg_types_are_known():
     }
 
     assert unknown == {}
+
+
+def test_meta_weapons_heavy_is_a_marker_count():
+    """
+    heavy (Lourd ! markers) is a positive integer when present
+    """
+    invalid = {
+        weapon['id']: weapon['heavy']
+        for weapon in _load_weapons()
+        if 'heavy' in weapon
+        and (type(weapon['heavy']) is not int or weapon['heavy'] < 1)
+    }
+
+    assert invalid == {}
