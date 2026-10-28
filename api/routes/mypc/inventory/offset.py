@@ -12,6 +12,7 @@ from utils.decorators import (
     check_creature_exists,
     check_item_exists,
     )
+from utils.resolver import notify_gear_changed
 
 
 #
@@ -41,6 +42,8 @@ def offset(creatureuuid, itemuuid, offsetx=None, offsety=None):
                 "payload": None,
             }
         ), 200
+
+    notify_gear_changed(g.Creature, 'offset')
 
     # JOB IS DONE
     msg = f'{g.h} Offset Query OK'
