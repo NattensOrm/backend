@@ -15,6 +15,7 @@ from utils.decorators import (
     )
 from utils.pa import instance_tick
 from utils.redis import r, get_pa
+from utils.resolver import notify_gear_changed
 
 #
 # Inventory.unequip specifics
@@ -97,6 +98,8 @@ def unequip(creatureuuid, type, slotname, itemuuid):
     except Exception as e:
         msg = (f'{g.h} Equip Queue KO [{e}]')
         logger.error(msg)
+
+    notify_gear_changed(g.Creature, 'unequip')
 
     msg = f'{g.h} Unequip OK'
     logger.debug(msg)
