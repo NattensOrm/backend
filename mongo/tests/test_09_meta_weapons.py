@@ -47,6 +47,23 @@ def test_meta_weapons_calibers_are_satchel_ammo_fields():
     assert unknown == {}
 
 
+def test_meta_weapons_polearm_flags():
+    """
+    polearm and counters_polearm are true when present, on melee weapons
+    only, and only a polearm can counter the other polearms
+    """
+    invalid = {
+        weapon['id']: (weapon.get('polearm'), weapon.get('counters_polearm'))
+        for weapon in _load_weapons()
+        if ('polearm' in weapon or 'counters_polearm' in weapon)
+        and (weapon.get('polearm') is not True
+             or weapon.get('counters_polearm', True) is not True
+             or weapon['ranged'])
+    }
+
+    assert invalid == {}
+
+
 def test_meta_weapons_have_stock_and_cadence():
     """
     Every weapon meta carries the stock and cadence keys (null allowed)
