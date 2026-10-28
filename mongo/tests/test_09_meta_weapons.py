@@ -60,6 +60,22 @@ def test_meta_weapons_have_stock_and_cadence():
     assert missing == []
 
 
+def test_meta_weapons_burst_only_needs_a_cadence():
+    """
+    burst_only (automatic fire) is true when present, and only on weapons
+    with a cadence above 1, otherwise the resolver ignores it
+    """
+    invalid = {
+        weapon['id']: (weapon['burst_only'], weapon['cadence'])
+        for weapon in _load_weapons()
+        if 'burst_only' in weapon
+        and (weapon['burst_only'] is not True
+             or weapon['cadence'] is None or weapon['cadence'] <= 1)
+    }
+
+    assert invalid == {}
+
+
 def test_meta_weapons_sizes_are_known():
     """
     Every weapon meta size is one of the inventory sizes of the design sheet
