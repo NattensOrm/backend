@@ -377,6 +377,7 @@
         "moddable":true,
         "name":"Armure Assistée",
         "parry":0,
+        "set":"assistee",
         "size":"2x3",
         "slot":"Torso",
         "tier":3
@@ -759,6 +760,7 @@
         "moddable":true,
         "name":"Casque Assisté",
         "parry":0,
+        "set":"assistee",
         "size":"2x2",
         "slot":"Head",
         "tier":3
@@ -1142,6 +1144,7 @@
         "moddable":true,
         "name":"Jambières Assistées",
         "parry":0,
+        "set":"assistee",
         "size":"2x2",
         "slot":"Legs",
         "tier":3
@@ -1524,6 +1527,7 @@
         "moddable":true,
         "name":"Épaulières Assistées",
         "parry":0,
+        "set":"assistee",
         "size":"2x2",
         "slot":"Shoulders",
         "tier":3
@@ -1906,6 +1910,7 @@
         "moddable":true,
         "name":"Gants Assistés",
         "parry":0,
+        "set":"assistee",
         "size":"2x2",
         "slot":"Hands",
         "tier":3
@@ -2289,6 +2294,7 @@
         "moddable":true,
         "name":"Bottes Assistées",
         "parry":0,
+        "set":"assistee",
         "size":"2x2",
         "slot":"Feet",
         "tier":3

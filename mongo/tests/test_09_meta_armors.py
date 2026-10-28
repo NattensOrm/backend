@@ -51,3 +51,17 @@ def test_meta_armors_bulldozer_is_a_heavy_body_armor():
     }
 
     assert invalid == {}
+
+
+def test_meta_armors_set_is_a_name():
+    """
+    set (armor suit the piece belongs to) is a non-empty string when present
+    """
+    invalid = {
+        armor['id']: armor['set']
+        for armor in _load_armors()
+        if 'set' in armor
+        and (type(armor['set']) is not str or armor['set'] == '')
+    }
+
+    assert invalid == {}
