@@ -1619,6 +1619,7 @@
     {
         "arpen":0,
         "burst_acc":-33,
+        "burst_only":true,
         "cadence":5,
         "caliber":"cal311",
         "defcan":0,
@@ -1652,6 +1653,7 @@
     {
         "arpen":0,
         "burst_acc":-50,
+        "burst_only":true,
         "cadence":5,
         "caliber":"cal50",
         "defcan":0,
@@ -1850,6 +1852,7 @@
     {
         "arpen":0,
         "burst_acc":-50,
+        "burst_only":true,
         "cadence":21,
         "caliber":"cal22",
         "defcan":0,
