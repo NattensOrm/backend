@@ -12,7 +12,7 @@ blinker==1.9.0
     # via flask
 click==8.5.0
     # via flask
-dnspython==2.8.0
+dnspython==2.9.0
     # via
     #   email-validator
     #   pymongo
@@ -59,15 +59,15 @@ prometheus-client==0.26.0
     # via prometheus-flask-exporter
 prometheus-flask-exporter==0.23.2
     # via -r requirements.in
-pydantic==2.13.5
+pydantic==2.14.1
     # via
     #   -r requirements.in
     #   flask-openapi3
-pydantic-core==2.46.5
+pydantic-core==2.50.1
     # via pydantic
 pyjwt==2.15.0
     # via flask-jwt-extended
-pymongo==4.18.2
+pymongo==4.18.3
     # via mongoengine
 redis==8.1.0
     # via -r requirements.in

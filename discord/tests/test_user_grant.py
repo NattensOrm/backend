@@ -15,7 +15,7 @@ async def test_grant_responds_once_regardless_of_creature_count(bot, make_ctx, g
     # `for Creature in Creatures` loop, so a user with 2+ creatures would
     # trigger a second ctx.respond() and blow up on an already-acknowledged
     # interaction. It must fire exactly once, after the loop.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     make_creature(account=user.id)
     make_creature(account=user.id)
 
@@ -54,7 +54,7 @@ def _granted_role_names(ctx):
 
 @pytest.mark.parametrize('rank', ['Leader', 'Member'])
 async def test_grant_gives_squad_role_to_squad_members(bot, make_ctx, get_callback, make_user, make_creature, rank):  # noqa: E501
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     squad_id = uuid.uuid4()
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank=rank))
 
@@ -73,7 +73,7 @@ async def test_grant_gives_squad_role_to_squad_members(bot, make_ctx, get_callba
 async def test_grant_skips_squad_role_for_pending_invitee(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
     # Ruling: a Pending invitee (invited, not accepted yet) is not a member,
     # so it must not get the Squad role (and channel) before it accepts.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     squad_id = uuid.uuid4()
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank='Pending'))
 
@@ -90,7 +90,7 @@ async def test_grant_skips_squad_role_for_pending_invitee(bot, make_ctx, get_cal
 
 
 async def test_grant_skips_korp_role_for_pending_invitee(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     make_creature(account=user.id, korp=CreatureKorp(id=uuid.uuid4(), rank='Pending'))
 
     group = bot.create_group(name='user', description='test')
@@ -108,7 +108,7 @@ async def test_grant_gives_korp_then_squad_role_to_korp_member(bot, make_ctx, ge
     # Regression test: the Korp role used to be looked up as
     # `Korp-{Creature.korp}` (the embedded document, not its id), so it was
     # never found and the Squad role was never granted either.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     korp_id = uuid.uuid4()
     squad_id = uuid.uuid4()
     make_creature(
@@ -136,7 +136,7 @@ async def test_grant_gives_korp_then_squad_role_to_korp_member(bot, make_ctx, ge
 async def test_grant_skips_role_missing_from_guild(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
     # A Squad/Korp role not created yet in the guild must not be passed to
     # add_roles(None): it is skipped, reported, and the command completes.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     korp_id = uuid.uuid4()
     squad_id = uuid.uuid4()
     make_creature(
@@ -170,7 +170,7 @@ def _setup(bot):
 async def test_grant_defers_before_answering(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
     # The Mongo queries + role calls can outlast Discord's 3s deadline:
     # the interaction must be acknowledged before any work is done.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     make_creature(account=user.id)
     callback = get_callback(_setup(bot), 'grant')
 
@@ -182,19 +182,37 @@ async def test_grant_defers_before_answering(bot, make_ctx, get_callback, make_u
     assert ctx.respond.call_count == 1
 
 
-async def test_grant_discord_name_linked_to_several_users_responds_once(bot, make_ctx, get_callback, make_user):  # noqa: E501
-    # Regression test: MultipleObjectsReturned used to fall through the
-    # generic except, leaving `User` unbound -> NameError, no answer.
-    make_user(discord={'name': 'tester', 'ack': True})
-    make_user(discord={'name': 'tester', 'ack': True})
+async def test_grant_survives_a_discord_rename(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
+    # Looked up by Discord id: a renamed user keeps their link, and the
+    # stored name (display only) is refreshed
+    user = make_user(discord={'id': '1234', 'name': 'old_name'})
+    make_creature(account=user.id)
     callback = get_callback(_setup(bot), 'grant')
 
-    ctx = make_ctx(author_name='tester', guild_roles=[_make_role('Singouins')])
+    ctx = make_ctx(author_name='new_name', guild_roles=[_make_role('Singouins')])
+    await callback(ctx)
+
+    assert _granted_role_names(ctx) == ['Singouins']
+    assert ':ok:' in ctx.respond.await_args.kwargs['embed'].description
+    user.reload()
+    assert user.discord.id == '1234'
+    assert user.discord.name == 'new_name'
+
+
+async def test_grant_same_name_other_discord_user_is_not_linked(bot, make_ctx, get_callback, make_user):  # noqa: E501
+    # Regression test: the lookup used to be by name - whoever took a
+    # freed username got the previous owner's account and roles
+    user = make_user(discord={'id': '1234', 'name': 'tester'})
+    callback = get_callback(_setup(bot), 'grant')
+
+    ctx = make_ctx(author_name='tester', author_id=5678, guild_roles=[_make_role('Singouins')])
     await callback(ctx)
 
     assert ctx.respond.call_count == 1
-    assert 'several Users' in ctx.respond.await_args.kwargs['embed'].description
+    assert 'not linked' in ctx.respond.await_args.kwargs['embed'].description
     ctx.author.add_roles.assert_not_awaited()
+    user.reload()
+    assert user.discord.name == 'tester'
 
 
 async def test_grant_user_query_failure_responds_once(bot, make_ctx, get_callback):
@@ -213,7 +231,7 @@ async def test_grant_creature_query_failure_responds_once(bot, make_ctx, get_cal
     # Regression test: the QuerySet is lazy, so the failure surfaces when it
     # is evaluated, not when objects() is called - it used to escape the
     # try, leaving `Creatures` unbound -> NameError, no answer.
-    make_user(discord={'name': 'tester', 'ack': False})
+    make_user()
     callback = get_callback(_setup(bot), 'grant')
 
     queryset = MagicMock()
@@ -228,7 +246,7 @@ async def test_grant_creature_query_failure_responds_once(bot, make_ctx, get_cal
 
 async def test_grant_singouins_role_missing_from_guild(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
     # Regression test: a missing Singouins role used to reach add_roles(None).
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     make_creature(account=user.id)
     callback = get_callback(_setup(bot), 'grant')
 
@@ -242,7 +260,7 @@ async def test_grant_singouins_role_missing_from_guild(bot, make_ctx, get_callba
 
 async def test_grant_shared_squad_role_added_once(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
     # Two Creatures of the same User in the same Squad: one role, one call.
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     squad_id = uuid.uuid4()
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank='Leader'))
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank='Member'))
@@ -257,7 +275,7 @@ async def test_grant_shared_squad_role_added_once(bot, make_ctx, get_callback, m
 
 
 async def test_grant_skips_role_already_held(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     squad_id = uuid.uuid4()
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank='Member'))
     callback = get_callback(_setup(bot), 'grant')
@@ -272,7 +290,7 @@ async def test_grant_skips_role_already_held(bot, make_ctx, get_callback, make_u
 
 
 async def test_grant_add_roles_failure_responds_once(bot, make_ctx, get_callback, make_user, make_creature):  # noqa: E501
-    user = make_user(discord={'name': 'tester', 'ack': False})
+    user = make_user()
     squad_id = uuid.uuid4()
     make_creature(account=user.id, squad=CreatureSquad(id=squad_id, rank='Member'))
     callback = get_callback(_setup(bot), 'grant')

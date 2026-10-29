@@ -1,7 +1,6 @@
 # -*- coding: utf8 -*-
 
 from bson import json_util
-import datetime
 import discord
 import json
 
@@ -13,6 +12,7 @@ from mongo.models.Creature import CreatureDocument
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Item import ItemDocument
 from mongo.models.Satchel import SatchelDocument
+from mongo.utils import utcnow
 
 from utils.redis import r
 from variables import env_vars, rarity_item_types_discord as ritd
@@ -112,7 +112,7 @@ class buyView(View):
                 currency__banana__gte=Auction.price,
                 ).update_one(
                     dec__currency__banana=Auction.price,
-                    set__updated=datetime.datetime.utcnow(),
+                    set__updated=utcnow(),
                     )
             if debited == 0:
                 SatchelBuyer.reload()
@@ -136,21 +136,21 @@ class buyView(View):
                 _id=SatchelSeller.id,
                 ).update_one(
                     inc__currency__banana=Auction.price,
-                    set__updated=datetime.datetime.utcnow(),
+                    set__updated=utcnow(),
                     )
             if credited == 0:
                 raise SatchelDocument.DoesNotExist(f'Seller Satchel {SatchelSeller.id} NotFound')
             # We change the Item owner
             Item.auctioned = False
             Item.bearer = CreatureBuyer.id
-            Item.updated = datetime.datetime.utcnow()
+            Item.updated = utcnow()
             Item.save()
             # Highscore
             HighscoreSeller.internal.item.sold += 1
-            HighscoreSeller.updated = datetime.datetime.utcnow()
+            HighscoreSeller.updated = utcnow()
             HighscoreSeller.save()
             HighscoreBuyer.internal.item.bought += 1
-            HighscoreBuyer.updated = datetime.datetime.utcnow()
+            HighscoreBuyer.updated = utcnow()
             HighscoreBuyer.save()
         except Exception as e:
             msg = f'{self.h} Auction buy KO [{e}]'

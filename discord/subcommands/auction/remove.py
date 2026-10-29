@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import discord
 
 from discord.commands import option
@@ -8,6 +7,7 @@ from loguru import logger
 
 from mongo.models.Auction import AuctionDocument
 from mongo.models.Item import ItemDocument
+from mongo.utils import utcnow
 
 from subcommands.auction._autocomplete import get_singouin_auctions_list
 from subcommands.singouin._autocomplete import get_mysingouins_list
@@ -18,7 +18,6 @@ from variables import env_vars, item_types_discord, rarity_item_types_discord
 def remove(group_auction):
     @group_auction.command(
         description='[@Singouins role] Remove an item from the Auction House',
-        default_permission=False,
         name='remove',
         )
     @option(
@@ -82,7 +81,7 @@ def remove(group_auction):
         try:
             Auction.delete()
             Item.auctioned = False
-            Item.updated = datetime.datetime.utcnow()
+            Item.updated = utcnow()
             Item.save()
         except Exception as e:
             description = f'Auction-Remove Query KO [{e}]'

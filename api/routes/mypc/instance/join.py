@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
@@ -14,6 +13,7 @@ from utils.decorators import (
 from utils.discord import discord_scopes
 from utils.redis import qput
 from variables import YQ_DISCORD
+from mongo.utils import utcnow
 
 
 # API: POST /mypc/<uuid:creatureuuid>/instance/<uuid:instanceuuid>/join
@@ -52,7 +52,7 @@ def join(creatureuuid, instanceuuid):
         g.Creature.x = x
         g.Creature.y = y
         g.Creature.instance = g.Instance.id
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f'{g.h} Instance({g.Instance.id}) Query KO [{e}]'

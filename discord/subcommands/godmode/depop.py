@@ -7,6 +7,7 @@ from discord.ext import commands
 from loguru import logger
 
 from mongo.models.Creature import CreatureDocument
+from mongo.utils import JSON_OPTIONS
 
 from subcommands.godmode._autocomplete import (
     get_instances_list,
@@ -23,7 +24,6 @@ from variables import (
 def depop(group_godmode):
     @group_godmode.command(
         description='[@Team role] Kill a Monster',
-        default_permission=False,
         name='depop',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs
@@ -83,7 +83,7 @@ def depop(group_godmode):
             # We put the info in pubsub channel for IA to regulate the instance
             cput(f"ai-creature-{env_vars['API_ENV'].lower()}", {
                 "action": 'kill',
-                "creature": Creature.to_json(),
+                "creature": Creature.to_json(json_options=JSON_OPTIONS),
                 })
         except Exception as e:
             description = f'Godmode-Depop Query KO [{e}]'

@@ -6,8 +6,8 @@
 ├── active (BooleanField)
 ├── created (DateTimeField)
 ├── discord
-│   ├── ack (BooleanField)
-│   └── name (StringField)
+│   ├── id (StringField) - Discord user id, unique (partial index)
+│   └── name (StringField) - display only
 ├── hash (StringField)
 ├── name (StringField)
 └── updated (DateTimeField)

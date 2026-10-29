@@ -17,7 +17,6 @@ from variables import metaIndexed, rarity_item_types_discord as ritd
 def search(group_auction, bot):
     @group_auction.command(
         description='[@Singouins role] Search in the Auction House',
-        default_permission=False,
         name='search',
         )
     @option(

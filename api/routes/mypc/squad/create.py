@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
@@ -8,6 +7,7 @@ from loguru import logger
 
 from mongo.models.Creature import CreatureSquad
 from mongo.models.Squad import SquadDocument
+from mongo.utils import utcnow
 
 from utils.decorators import check_creature_exists
 from utils.redis import qput
@@ -64,7 +64,7 @@ def squad_create(creatureuuid):
             id=newSquad.id,
             rank='Leader'
             )
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f'{g.h} Squad Query KO (squaduuid:{newSquad.id}) [{e}]'

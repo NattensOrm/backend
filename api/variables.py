@@ -50,6 +50,13 @@ PS_AI_CREATURE = f"ai-creature-{str(env_vars['API_ENV']).lower()}"
 RESOLVER_HOST = os.environ.get("RESOLVER_HOST", 'resolver-svc')
 RESOLVER_PORT = os.environ.get("RESOLVER_PORT", 3000)
 RESOLVER_URL  = f'http://{RESOLVER_HOST}:{RESOLVER_PORT}'
+# RESOLVER_INTERNAL_TOKEN authenticates the API's calls to the resolver
+# /internal/* routes (gear-changed notifications, see utils/resolver.py).
+# Shared with the resolver through a k8s Secret. Unset = notifications disabled.
+RESOLVER_INTERNAL_TOKEN = os.environ.get("RESOLVER_INTERNAL_TOKEN")
+if not RESOLVER_INTERNAL_TOKEN:
+    logger.warning('RESOLVER_INTERNAL_TOKEN unset: '
+                   'gear-changed notifications to the resolver are disabled')
 
 # Gunicorn variables
 GUNICORN_CHDIR   = os.environ.get("GUNICORN_CHDIR", '/code')

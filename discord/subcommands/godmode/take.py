@@ -24,7 +24,6 @@ from variables import (
 def take(group_godmode):
     @group_godmode.command(
         description='[@Team role] Take an Item from a Singouin',
-        default_permission=False,
         name='take',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

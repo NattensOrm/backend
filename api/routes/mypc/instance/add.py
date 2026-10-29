@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import json
 import uuid
 
@@ -21,6 +20,7 @@ from mongo.models.Creature import (
 )
 from mongo.models.Instance import InstanceDocument
 from mongo.models.Meta import MetaMap
+from mongo.utils import JSON_OPTIONS, utcnow
 
 from routes.mypc.instance._tools import get_empty_coords
 from utils.decorators import (
@@ -98,7 +98,7 @@ def add(creatureuuid):
         newInstance.save()
 
         g.Creature.instance = newInstance.id
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f"{g.h} Instance Query KO [{e}]"
@@ -188,8 +188,8 @@ def add(creatureuuid):
                     cput('ai-creature',
                          json.dumps({
                             "action": 'pop',
-                            "instance": newInstance.to_json(),
-                            "creature": newMonster.to_json(),
+                            "instance": newInstance.to_json(json_options=JSON_OPTIONS),
+                            "creature": newMonster.to_json(json_options=JSON_OPTIONS),
                             }))
                 except Exception as e:
                     msg = f'{g.h} Publish(ai-creature/pop) KO [{e}]'
@@ -206,7 +206,7 @@ def add(creatureuuid):
 
         g.Creature.x = x
         g.Creature.y = y
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f"{g.h} Creature Query KO [{e}]"

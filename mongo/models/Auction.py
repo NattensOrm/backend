@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -18,6 +17,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 ITEM_RARITY = [
     'Broken',
@@ -75,11 +76,11 @@ class AuctionDocument(Document):
     - updated   (DateTimeField)
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     item = EmbeddedDocumentField(AuctionItem, required=True)
     price = IntField(required=True)
     seller = EmbeddedDocumentField(AuctionSeller, required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'auctions',

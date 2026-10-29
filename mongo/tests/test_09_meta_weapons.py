@@ -15,6 +15,7 @@ WEAPONS_FILE = os.path.join(
     '..', 'data', 'metas', 'weapons.json',
 )
 ALLOWED_SIZES = {'1x2', '2x2', '2x3', '2x4', '3x4'}
+ALLOWED_DMG_TYPES = {'physical', 'ballistic', 'buckshot', 'explosive'}
 
 
 def _load_weapons():
@@ -47,6 +48,23 @@ def test_meta_weapons_calibers_are_satchel_ammo_fields():
     assert unknown == {}
 
 
+def test_meta_weapons_polearm_flags():
+    """
+    polearm and counters_polearm are true when present, on melee weapons
+    only, and only a polearm can counter the other polearms
+    """
+    invalid = {
+        weapon['id']: (weapon.get('polearm'), weapon.get('counters_polearm'))
+        for weapon in _load_weapons()
+        if ('polearm' in weapon or 'counters_polearm' in weapon)
+        and (weapon.get('polearm') is not True
+             or weapon.get('counters_polearm', True) is not True
+             or weapon['ranged'])
+    }
+
+    assert invalid == {}
+
+
 def test_meta_weapons_have_stock_and_cadence():
     """
     Every weapon meta carries the stock and cadence keys (null allowed)
@@ -60,6 +78,22 @@ def test_meta_weapons_have_stock_and_cadence():
     assert missing == []
 
 
+def test_meta_weapons_burst_only_needs_a_cadence():
+    """
+    burst_only (automatic fire) is true when present, and only on weapons
+    with a cadence above 1, otherwise the resolver ignores it
+    """
+    invalid = {
+        weapon['id']: (weapon['burst_only'], weapon['cadence'])
+        for weapon in _load_weapons()
+        if 'burst_only' in weapon
+        and (weapon['burst_only'] is not True
+             or weapon['cadence'] is None or weapon['cadence'] <= 1)
+    }
+
+    assert invalid == {}
+
+
 def test_meta_weapons_sizes_are_known():
     """
     Every weapon meta size is one of the inventory sizes of the design sheet
@@ -71,3 +105,30 @@ def test_meta_weapons_sizes_are_known():
     }
 
     assert unknown == {}
+
+
+def test_meta_weapons_dmg_types_are_known():
+    """
+    Every weapon meta damage type is one of the design sheet damage types
+    """
+    unknown = {
+        weapon['id']: weapon.get('dmg_type')
+        for weapon in _load_weapons()
+        if weapon.get('dmg_type') not in ALLOWED_DMG_TYPES
+    }
+
+    assert unknown == {}
+
+
+def test_meta_weapons_heavy_is_a_marker_count():
+    """
+    heavy (Lourd ! markers) is a positive integer when present
+    """
+    invalid = {
+        weapon['id']: weapon['heavy']
+        for weapon in _load_weapons()
+        if 'heavy' in weapon
+        and (type(weapon['heavy']) is not int or weapon['heavy'] < 1)
+    }
+
+    assert invalid == {}

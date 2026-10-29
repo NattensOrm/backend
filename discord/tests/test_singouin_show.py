@@ -4,7 +4,7 @@ from subcommands.singouin.show import show as show_command
 
 
 async def test_show_lists_users_creatures(bot, make_ctx, get_callback, make_user, make_creature):
-    user = make_user(discord={'name': 'tester', 'ack': True})
+    user = make_user()
     make_creature(account=user.id, name='Bobby', race=1, level=3)
 
     group = bot.create_group(name='mysingouin', description='test')

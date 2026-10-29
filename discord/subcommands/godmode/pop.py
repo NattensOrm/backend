@@ -18,6 +18,7 @@ from mongo.models.Creature import (
     CreatureKorp
     )
 from mongo.models.Instance import InstanceDocument
+from mongo.utils import JSON_OPTIONS
 
 from subcommands.godmode._autocomplete import (
     get_instances_list,
@@ -36,7 +37,6 @@ from variables import (
 def pop(group_godmode):
     @group_godmode.command(
         description='[@Team role] Spawn a Monster',
-        default_permission=False,
         name='pop',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs
@@ -138,8 +138,8 @@ def pop(group_godmode):
         # We put the info in pubsub channel for IA to populate the instance
         cput(f"ai-creature-{env_vars['API_ENV'].lower()}", {
             "action": 'pop',
-            "creature": newCreature.to_json(),
-            "instance": Instance.to_json(),
+            "creature": newCreature.to_json(json_options=JSON_OPTIONS),
+            "instance": Instance.to_json(json_options=JSON_OPTIONS),
             })
 
         # MongoDB CreatureDocument should be created

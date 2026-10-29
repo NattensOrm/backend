@@ -5,6 +5,7 @@ import datetime
 
 def auction_time_left(creation_date):
     from mongo.models.Auction import AuctionDocument
+    from mongo.utils import utcnow
 
     # Access the underlying pymongo collection
     collection = AuctionDocument._get_collection()
@@ -19,7 +20,7 @@ def auction_time_left(creation_date):
             expiration_duration = datetime.timedelta(seconds=expiration)
 
     expiration_time = creation_date + expiration_duration
-    remaining_time = expiration_time - datetime.datetime.utcnow()
+    remaining_time = expiration_time - utcnow()
     # Extract hours, minutes, and seconds from timedelta
     remaining_h = remaining_time.days * 24 + remaining_time.seconds // 3600
     remaining_m = (remaining_time.seconds % 3600) // 60

@@ -19,7 +19,6 @@ from variables import env_vars
 def reset(group_godmode):
     @group_godmode.command(
         description='[@Team role] Reset Action Points for a Singouin',
-        default_permission=False,
         name='reset',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

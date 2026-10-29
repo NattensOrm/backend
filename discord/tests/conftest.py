@@ -131,12 +131,14 @@ def make_ctx():
     ctx.channel.name/type, ctx.author.*, ctx.guild.roles, and the async
     ctx.defer()/ctx.respond()/ctx.author.add_roles()/ctx.author.send() calls.
     """
-    def _make_ctx(*, author_name='tester', channel_name='general', channel_type=None, guild_roles=None):  # noqa: E501
+    def _make_ctx(*, author_name='tester', author_id=1234, channel_name='general', channel_type=None, guild_roles=None):  # noqa: E501
         roles = list(guild_roles or [])
         ctx = MagicMock()
         ctx.channel.name = channel_name
         ctx.channel.type = channel_type or discord.ChannelType.text
         ctx.author.name = author_name
+        # The identity a User is linked by (see utils/users.py), an int like pycord's
+        ctx.author.id = author_id
         ctx.author.roles = []
         ctx.author.guild.roles = roles
         ctx.guild.roles = roles
@@ -198,7 +200,8 @@ def make_user():
         data = dict(
             _id=uuid.uuid4(),
             active=True,
-            discord={'name': 'tester', 'ack': False},
+            # Linked to make_ctx()'s default author (id as str, see UserDiscord)
+            discord={'id': '1234', 'name': 'tester'},
             hash='hashed',
             name='tester',
             )

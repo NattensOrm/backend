@@ -46,7 +46,7 @@ def body(by=None):
     return {
         "reason": 'death',
         "by": by,
-        "at": datetime.datetime.utcnow().isoformat(),
+        "at": datetime.datetime.now(datetime.UTC).replace(tzinfo=None).isoformat(),
         "requestId": str(uuid.uuid4()),
         }
 

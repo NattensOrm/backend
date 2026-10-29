@@ -19,7 +19,10 @@ def send(adress, subject, body):
     message.attach(message_content)
 
     try:
-        with smtplib.SMTP_SSL(env_vars['SMTP_SERVER'], local_hostname=env_vars['SMTP_HOSTNAME']) as mail:
+        with smtplib.SMTP_SSL(
+            env_vars['SMTP_SERVER'],
+            local_hostname=env_vars['SMTP_HOSTNAME'],
+        ) as mail:
             mail.login(env_vars['SMTP_USER'], env_vars['SMTP_PASS'])
             mail.sendmail(message["From"], message["To"], message.as_string())
     except (smtplib.SMTPException, OSError) as e:

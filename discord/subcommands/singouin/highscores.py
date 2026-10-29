@@ -17,7 +17,6 @@ from subcommands.singouin._tools import creature_sprite
 def highscores(group_singouin, bot):
     @group_singouin.command(
         description='[@Singouins role] Display your Singouin(s) HighScores',
-        default_permission=False,
         name='highscores',
         )
     @commands.has_any_role('Singouins', 'Team')

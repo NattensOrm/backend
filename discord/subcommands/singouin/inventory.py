@@ -20,7 +20,6 @@ def inventory(group_singouin):
             '[@Singouins role] '
             'Display your Singouin Inventory'
             ),
-        default_permission=False,
         name='inventory',
         )
     @commands.has_any_role('Singouins')

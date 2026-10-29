@@ -1,11 +1,11 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import math
 
 from random import choices, random
 
 from mongo.models.Profession import ProfessionDocument
+from mongo.utils import utcnow
 
 
 def profession_gain(creatureuuid, profession, profession_score=None):
@@ -42,7 +42,7 @@ def profession_gain(creatureuuid, profession, profession_score=None):
                 # We INCR the Profession accordingly
                 profession_update_query = {
                     f'inc__{profession}': gain,
-                    "set__updated": datetime.datetime.utcnow(),
+                    "set__updated": utcnow(),
                     }
                 ProfessionDocument.objects(_id=creatureuuid).update(**profession_update_query)
 

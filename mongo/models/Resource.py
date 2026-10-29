@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 RESOURCE_RARITY = [
     'Broken',
@@ -49,12 +50,12 @@ class ResourceDocument(Document):
     - y         (IntField)
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     instance = UUIDField(binary=False, required=True)
     material = StringField(required=True)
     rarity = StringField(required=True, choices=RESOURCE_RARITY, default='Common')
     sprite = StringField(required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
     visible = BooleanField(required=True, default=False)
     x = IntField(required=True)
     y = IntField(required=True)

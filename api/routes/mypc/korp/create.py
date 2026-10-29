@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify, request
 from flask_jwt_extended import jwt_required
@@ -9,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 
 from mongo.models.Creature import CreatureKorp
 from mongo.models.Korp import KorpDocument
+from mongo.utils import utcnow
 
 from utils.decorators import check_creature_exists, check_is_json
 from utils.redis import qput
@@ -81,7 +81,7 @@ def korp_create(creatureuuid):
             id=newKorp.id,
             rank='Leader'
             )
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
     except Exception as e:
         msg = f'{g.h} Korp Query KO (korpuuid:{newKorp.id}) [{e}]'

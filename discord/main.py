@@ -106,6 +106,12 @@ try:
     group_godmode = bot.create_group(
         description="Commands related to being THE almighty",
         name=group_name,
+        # Hidden from non-admins in the menu. Discord applies it to the whole
+        # group (not per subcommand); server admins can allow more roles in
+        # Server Settings > Integrations. The real check stays has_any_role('Team').
+        default_member_permissions=discord.Permissions(administrator=True),
+        # Guild only, natively: Discord hides the group in DMs
+        contexts={discord.InteractionContextType.guild},
         )
 except Exception as e:
     logger.error(f'[{group_name}] Command Group KO [{e}]')

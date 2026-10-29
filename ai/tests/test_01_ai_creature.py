@@ -19,6 +19,7 @@ from mongo.models.Creature import (
     CreatureStatsType,
     )
 from mongo.models.Instance import InstanceDocument
+from mongo.utils import JSON_OPTIONS
 
 # Redis variables
 REDIS_HOST = os.environ.get("REDIS_HOST", '127.0.0.1')
@@ -97,7 +98,7 @@ def _publish(action, creature_doc):
         CREATURE_PATH,
         json.dumps({
             "action": action,
-            "creature": creature_doc.to_json(),
+            "creature": creature_doc.to_json(json_options=JSON_OPTIONS),
             })
         )
 

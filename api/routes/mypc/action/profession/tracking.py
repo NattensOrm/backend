@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from flask import g, jsonify
@@ -8,6 +7,7 @@ from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Highscore import HighscoreDocument
+from mongo.utils import utcnow
 
 from routes._decorators import belongs, exists
 from utils.pa import instance_tick
@@ -69,7 +69,7 @@ def tracking(creatureuuid):
     # We set the HighScores
     highscores_update_query = {
         f'inc__profession__{PROFESSION_NAME}': 1,
-        "set__updated": datetime.datetime.utcnow(),
+        "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update_one(**highscores_update_query)
 

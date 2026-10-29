@@ -4,11 +4,11 @@
 #
 #    pip-compile --no-index --strip-extras requirements.in
 #
-dnspython==2.7.0
+dnspython==2.9.0
     # via pymongo
 loguru==0.7.3
     # via -r requirements.in
 mongoengine==0.29.3
     # via -r requirements.in
-pymongo==4.18.2
+pymongo==4.18.3
     # via mongoengine

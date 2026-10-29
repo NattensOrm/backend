@@ -16,7 +16,6 @@ from subcommands.singouin._tools import creature_sprite
 def squad(group_singouin, bot):
     @group_singouin.command(
         description='[@Singouins role] Display your Singouin Squad',
-        default_permission=False,
         name='squad',
         )
     @commands.has_any_role('Singouins', 'Team')

@@ -16,7 +16,6 @@ from subcommands.singouin._tools import creature_sprite
 def korp(group_singouin, bot):
     @group_singouin.command(
         description='[@Singouins role] Display your Singouin Korp',
-        default_permission=False,
         name='korp',
         )
     @commands.has_any_role('Singouins', 'Team')

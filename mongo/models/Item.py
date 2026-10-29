@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 ITEM_RARITY = [
     'Broken',
@@ -46,7 +47,7 @@ class ItemDocument(Document):
     bearer = UUIDField(required=True, binary=False)
     bound = BooleanField(required=True, default=True)
     bound_type = StringField(required=True, default='BoP')
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     metatype = StringField(required=True)
     metaid = IntField(required=True)
     modded = BooleanField(required=True, default=False)
@@ -55,7 +56,7 @@ class ItemDocument(Document):
     offsety = IntField(default=None)
     rarity = StringField(required=True, choices=ITEM_RARITY, default='Common')
     state = IntField(required=True, default=100)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'items',

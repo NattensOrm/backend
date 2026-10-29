@@ -1,4 +1,3 @@
-import datetime
 import uuid
 
 from mongoengine import (
@@ -14,6 +13,8 @@ from mongoengine.fields import (
     # StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: squad
@@ -31,9 +32,9 @@ class SquadDocument(Document):
     - updated   (DateTimeField)
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     leader = UUIDField(binary=False, required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'squads',

@@ -77,25 +77,12 @@ async def check(bot: discord.Client, timer: int):
                     logger.trace('Message LOOT')
                     item = msg['payload']['item']
                     winner = msg['payload']['winner']
-                    User = UserDocument.objects(_id=winner['id'])
+                    User = UserDocument.objects(_id=winner['id']).first()
 
-                    if User.discord.name:
-                        # The Singouin who looted is linked on Discord
-                        logger.trace(f"Discord Name (d_name:{User.d_name})")
-                        (name, discriminator) = User.d_name.split('#')
-                        # The loot winner has a registered Discord Acc
-                        discorduser = discord.utils.get(
-                            bot.get_all_members(),
-                            name=name,
-                            discriminator=discriminator
-                            )
-                        # We add that info into the proper var
-                        if discorduser:
-                            logger.debug(f'Discord User Query OK (discorduser:{discorduser})')
-                            header = f"{discorduser.mention} (**{winner['name']}**) looted that !"
-                        else:
-                            header = f"Somebody ({winner['name']}) looted that !"
-                            logger.warning('Discord User Query KO - NotFound')
+                    if User is not None and User.discord.id:
+                        # The Singouin who looted is linked on Discord: a
+                        # mention by id needs no member lookup
+                        header = f"<@{User.discord.id}> (**{winner['name']}**) looted that !"
                     else:
                         # The Singouin who looted is NOT linked on Discord
                         header = f"Somebody ({winner['name']}) looted that !"

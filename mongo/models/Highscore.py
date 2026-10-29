@@ -1,4 +1,3 @@
-import datetime
 
 from mongoengine import (
     Document,
@@ -13,6 +12,8 @@ from mongoengine.fields import (
     # StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 #
 # Collection: highscore
@@ -106,11 +107,11 @@ class HighscoreDocument(Document):
     - updated       (DateTimeField)
     """
     _id = UUIDField(binary=False, primary_key=True)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     general = EmbeddedDocumentField(HighscoreGeneral, required=True)
     internal = EmbeddedDocumentField(HighscoreInternal, required=True)
     profession = EmbeddedDocumentField(HighscoreProfession, required=True)
-    updated = DateTimeField(default=datetime.datetime.utcnow)
+    updated = DateTimeField(default=utcnow)
 
     meta = {
         'collection': 'highscores',

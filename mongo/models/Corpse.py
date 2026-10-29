@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import datetime
 import uuid
 
 from mongoengine import (
@@ -17,6 +16,8 @@ from mongoengine.fields import (
     StringField,
     UUIDField,
 )
+
+from mongo.utils import utcnow
 
 CREATURE_RARITY = [
     'Small',
@@ -52,7 +53,7 @@ class CorpseDocument(Document):
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     account = UUIDField(binary=False, default=None)
-    created = DateTimeField(default=datetime.datetime.utcnow)
+    created = DateTimeField(default=utcnow)
     gender = BooleanField(required=True)
     instance = UUIDField(binary=False, required=True)
     killer = UUIDField(binary=False)

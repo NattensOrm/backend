@@ -6,7 +6,7 @@ from loguru import logger
 from discord.ext import commands
 
 from mongo.models.Creature import CreatureDocument
-from mongo.models.User import UserDocument
+from utils.users import linked_user
 
 # Squad/Korp ranks that make a Creature an actual member.
 # 'Pending' (invited, not accepted yet) is deliberately left out.
@@ -16,7 +16,6 @@ MEMBER_RANKS = ('Leader', 'Member')
 def grant(group_user, bot):
     @group_user.command(
         description='[@everyone] Update your Discord roles (Squad/Korp)',
-        default_permission=False,
         name='grant',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs
@@ -30,35 +29,29 @@ def grant(group_user, bot):
         # interaction deadline: acknowledge first, answer afterwards
         await ctx.defer(ephemeral=True)
 
-        # Get the User
+        # Get the User, by Discord id (see utils/users.py)
         try:
-            User = UserDocument.objects(discord__name=ctx.author.name).get()
-        except UserDocument.DoesNotExist:
-            logger.warning("UserDocument Query KO (404)")
-            await ctx.respond(
-                embed=discord.Embed(
-                    description=f'Unknown Discord Name:`{ctx.author.name}` in DB',
-                    colour=discord.Colour.orange(),
-                    ),
-                ephemeral=True,
-                )
-            return
-        except UserDocument.MultipleObjectsReturned:
-            logger.error(f'{h} ├──> Discord Name linked to several Users')
-            await ctx.respond(
-                embed=discord.Embed(
-                    description=f'Discord Name:`{ctx.author.name}` linked to several Users in DB',
-                    colour=discord.Colour.red(),
-                    ),
-                ephemeral=True,
-                )
-            return
+            User = linked_user(ctx.author)
         except Exception as e:
             logger.error(f'MongoDB Query KO [{e}]')
             await ctx.respond(
                 embed=discord.Embed(
                     description=f'MongoDB Query KO\n[{e}]',
                     colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
+
+        if User is None:
+            logger.warning("UserDocument Query KO (404)")
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=(
+                        'Your Discord user is not linked to a Singouin account yet\n'
+                        'Use `/user link` with a code generated in the game'
+                        ),
+                    colour=discord.Colour.orange(),
                     ),
                 ephemeral=True,
                 )

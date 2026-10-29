@@ -6,7 +6,7 @@ from discord.ext import commands
 from loguru import logger
 
 from mongo.models.Creature import CreatureDocument
-from mongo.models.User import UserDocument
+from utils.users import linked_user
 
 
 def show(group_singouin, bot):
@@ -15,7 +15,6 @@ def show(group_singouin, bot):
             '[@Singouins role] '
             'Show your Singouin(s) informations'
             ),
-        default_permission=False,
         name='show',
         )
     @commands.has_any_role('Singouins')
@@ -32,20 +31,31 @@ def show(group_singouin, bot):
             discord.utils.get(bot.emojis, name='raceO'),
             ]
 
-        if UserDocument.objects(discord__name=ctx.author.name).count() == 0:
-            # Discord name not found in DB
-            msg = f'Unknown Discord Name:`{ctx.author.name}` in DB'
+        # Get the User, by Discord id (see utils/users.py)
+        try:
+            User = linked_user(ctx.author)
+        except Exception as e:
+            logger.error(f'MongoDB Query KO [{e}]')
+            await ctx.respond(
+                embed=discord.Embed(
+                    description=f'MongoDB Query KO\n[{e}]',
+                    colour=discord.Colour.red(),
+                    ),
+                ephemeral=True,
+                )
+            return
+
+        if User is None:
+            msg = 'Your Discord user is not linked to a Singouin account yet'
             logger.trace(msg)
             await ctx.respond(
                 embed=discord.Embed(
-                    description=msg,
+                    description=f'{msg}\nUse `/user link` with a code generated in the game',
                     colour=discord.Colour.orange(),
                     ),
                 ephemeral=True,
                 )
             return
-        else:
-            User = UserDocument.objects(discord__name=ctx.author.name).get()
 
         try:
             Creatures = CreatureDocument.objects(account=User.id)

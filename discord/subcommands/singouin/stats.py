@@ -2,13 +2,14 @@
 
 import discord
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from discord.commands import option
 from discord.ext import commands
 from loguru import logger
 
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Aggro import AggroDocument
+from mongo.utils import utcnow
 
 from subcommands.singouin._autocomplete import get_mysingouins_list
 from subcommands.singouin._tools import creature_sprite
@@ -17,7 +18,6 @@ from subcommands.singouin._tools import creature_sprite
 def stats(group_singouin, bot):
     @group_singouin.command(
         description='[@Singouins role] Display your Singouin Stats',
-        default_permission=False,
         name='stats',
         )
     @commands.has_any_role('Singouins')
@@ -55,8 +55,8 @@ def stats(group_singouin, bot):
             {
                 "$match": {
                     "created": {
-                        "$gte": datetime.utcnow() - timedelta(hours=48),
-                        "$lte": datetime.utcnow()
+                        "$gte": utcnow() - timedelta(hours=48),
+                        "$lte": utcnow()
                     }
                 }
             },
@@ -68,7 +68,7 @@ def stats(group_singouin, bot):
             }
         ]
         # Reading the aggregated result
-        Aggro = list(AggroDocument.objects.aggregate(*pipeline))
+        Aggro = list(AggroDocument.objects.aggregate(pipeline))
         if Aggro:
             aggro = Aggro[0].get('total_amount', 0)
         else:

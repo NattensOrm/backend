@@ -25,7 +25,6 @@ from variables import (
 def give(group_godmode):
     @group_godmode.command(
         description='[@Team role] Loot an Item to a Singouin',
-        default_permission=False,
         name='give',
         )
     @commands.guild_only()  # Hides the command from the menu in DMs

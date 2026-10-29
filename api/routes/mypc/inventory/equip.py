@@ -1,12 +1,12 @@
 # -*- coding: utf8 -*-
 
-import datetime
 
 from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Creature import CreatureSlot, CreatureSlots
+from mongo.utils import utcnow
 
 from utils.decorators import (
     check_creature_exists,
@@ -14,6 +14,7 @@ from utils.decorators import (
     )
 from utils.pa import equip_cost, instance_tick, pa_shortfall_colour
 from utils.redis import r, get_pa, consume_pa
+from utils.resolver import notify_gear_changed
 from variables import metaIndexed
 
 #
@@ -277,7 +278,7 @@ def equip(creatureuuid, type, slotname, itemuuid):
             }
         ), 200
     else:
-        g.Creature.updated = datetime.datetime.utcnow()
+        g.Creature.updated = utcnow()
         g.Creature.save()
 
     # Here everything should be OK with the equip
@@ -302,6 +303,8 @@ def equip(creatureuuid, type, slotname, itemuuid):
     except Exception as e:
         msg = (f'{g.h} Equip Queue KO [{e}]')
         logger.error(msg)
+
+    notify_gear_changed(g.Creature, 'equip')
 
     # JOB IS DONE
     msg = f'{g.h} Equip Query OK'
