@@ -25,6 +25,12 @@ sys.path.append(LOCAL_PATH)
 PROFESSION_ROUTES = os.path.join(LOCAL_PATH, 'routes', 'mypc', 'action', 'profession')
 RARITIES = ['Broken', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
 TICK = 3600
+# Distinct scores, to tell which one the gathering yield reads
+GATHERING = 7
+SKINNING = 3
+SLOTS = (
+    'feet', 'hands', 'head', 'holster', 'lefthand', 'legs', 'righthand', 'shoulders', 'torso',
+    )
 
 
 def _identity(func):
@@ -51,9 +57,19 @@ def _refusal(msg):
 
 
 class _QuerySet(list):
-    """ A Mongo queryset: truthy when it holds a document, get() returns it. """
+    """
+    A Mongo queryset: truthy when it holds a document, get() returns it,
+    delete() returns how many documents it removed (on_delete decides).
+    """
+    def __init__(self, documents, on_delete=None):
+        super().__init__(documents)
+        self.on_delete = on_delete
+
     def get(self):
         return self[0]
+
+    def delete(self):
+        return self.on_delete()
 
 
 @pytest.fixture
@@ -70,7 +86,9 @@ def world(monkeypatch):
     events = []
     pa_checks = {}
     refuse = set()
-    state = types.SimpleNamespace(resource=None, skin=10, redis_error=False)
+    state = types.SimpleNamespace(
+        resource=None, skin=10, redis_error=False, claim_lost=False, scaled=[],
+        )
 
     def pa(red=0, blue=0, consume=False):
         def decorator(func):
@@ -127,15 +145,30 @@ def world(monkeypatch):
         'mongo.models.Profession', monkeypatch,
         ProfessionDocument=types.SimpleNamespace(
             objects=lambda _id=None: types.SimpleNamespace(
-                get=lambda: types.SimpleNamespace(gathering=0, recycling=0, skinning=0),
+                get=lambda: types.SimpleNamespace(gathering=GATHERING, recycling=0, skinning=SKINNING),
+                ),
+            ),
+        )
+
+    def resource_delete():
+        # The atomic claim: a concurrent gatherer may have deleted it first
+        if state.claim_lost or state.resource is None:
+            return 0
+        state.resource = None
+        events.append(('resource_claim',))
+        return 1
+
+    _module(
+        'mongo.models.Resource', monkeypatch,
+        ResourceDocument=types.SimpleNamespace(
+            objects=lambda _id=None: _QuerySet(
+                [state.resource] if state.resource else [], on_delete=resource_delete,
                 ),
             ),
         )
     _module(
-        'mongo.models.Resource', monkeypatch,
-        ResourceDocument=types.SimpleNamespace(
-            objects=lambda _id=None: _QuerySet([state.resource] if state.resource else []),
-            ),
+        'mongo.models.Creature', monkeypatch,
+        CreatureSlots=types.SimpleNamespace(_fields={name: None for name in SLOTS}),
         )
     _module(
         'mongo.models.Satchel', monkeypatch,
@@ -150,7 +183,7 @@ def world(monkeypatch):
         'routes.mypc.action.profession._tools', monkeypatch,
         probabilistic_binary=lambda stat: 0,
         profession_gain=lambda *args: events.append(('profession',)),
-        profession_scaled=lambda score: 0,
+        profession_scaled=lambda score: state.scaled.append(score) or 0,
         )
     _module('utils.pa', monkeypatch, instance_tick=lambda creature: TICK)
 
@@ -181,6 +214,9 @@ def world(monkeypatch):
     creature = types.SimpleNamespace(
         id=uuid.uuid4(),
         instance=uuid.uuid4(),
+        x=1,
+        y=1,
+        slots=None,
         stats=types.SimpleNamespace(total=types.SimpleNamespace(m=50, b=50)),
         )
 
@@ -199,11 +235,16 @@ def world(monkeypatch):
         )
 
 
-def _resource(world, rarity):
+def _resource(world, rarity, x=1, y=1, instance=None):
+    """ A Resource in the Creature's instance, by default on its cell. """
     world.state.resource = types.SimpleNamespace(
+        id=uuid.uuid4(),
+        instance=world.creature.instance if instance is None else instance,
         rarity=rarity,
-        delete=lambda: world.events.append(('resource_delete',)),
+        x=x,
+        y=y,
         )
+    return world.state.resource
 
 
 def _item(world, rarity):
@@ -252,12 +293,13 @@ def test_gathering_pays_once_before_any_credit(world):
 
     assert code == 200
     assert body['success'] is True
+    # The Resource is claimed (deleted) first, then paid for, then credited
     assert world.events == [
+        ('resource_claim',),
         ('pa', world.creature.id, 0, 4, TICK),
         ('profession',),
         ('highscore',),
         ('satchel',),
-        ('resource_delete',),
         ]
 
 
@@ -269,6 +311,72 @@ def test_gathering_zero_yield_still_pays_once(world):
 
     assert body['payload']['resource'][0]['count'] == 0
     assert _pa_events(world) == [('pa', world.creature.id, 0, 4, TICK)]
+
+
+def test_gathering_yield_reads_the_gathering_score(world):
+    # It read Profession.skinning
+    _resource(world, 'Common')
+
+    world.call('gathering', resourceuuid=uuid.uuid4())
+
+    assert world.state.scaled == [GATHERING]
+
+
+def test_gathering_in_another_instance_is_free(world):
+    resource = _resource(world, 'Common', instance=uuid.uuid4())
+
+    code, body = world.call('gathering', resourceuuid=resource.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'not in this instance' in body['msg']
+    assert world.state.resource is resource
+
+
+# Lordslair 2026-10-29: "prenons les mêmes règles que pour dépeçage pour la
+# distance": the Creature's cell or an adjacent one (Creature at (1, 1))
+@pytest.mark.parametrize('x, y', [(1, 1), (0, 0), (2, 2), (0, 2), (2, 1), (1, 0)])
+def test_gathering_within_one_cell_is_done(world, x, y):
+    _resource(world, 'Common', x=x, y=y)
+
+    code, body = world.call('gathering', resourceuuid=uuid.uuid4())
+
+    assert body['success'] is True
+    assert world.state.resource is None
+
+
+@pytest.mark.parametrize('x, y', [(3, 1), (1, 3), (-1, 1), (1, -1), (3, 3), (-1, -1)])
+def test_gathering_two_cells_away_is_free(world, x, y):
+    resource = _resource(world, 'Common', x=x, y=y)
+
+    code, body = world.call('gathering', resourceuuid=resource.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'not in range' in body['msg']
+    assert world.state.resource is resource
+
+
+@pytest.mark.parametrize('attribute', ['x', 'y'])
+def test_gathering_without_a_position_is_free(world, attribute):
+    # x/y default to None on a Creature: no range, and no TypeError (500)
+    setattr(world.creature, attribute, None)
+    _resource(world, 'Common')
+
+    code, body = world.call('gathering', resourceuuid=uuid.uuid4())
+
+    _assert_refused_free(world, code, body)
+    assert 'not in range' in body['msg']
+
+
+def test_gathering_lost_claim_is_free(world):
+    # Two gatherers on one Resource: the one whose delete removed nothing is
+    # refused, unpaid and uncredited
+    _resource(world, 'Common')
+    world.state.claim_lost = True
+
+    code, body = world.call('gathering', resourceuuid=uuid.uuid4())
+
+    _assert_refused_free(world, code, body)
+    assert 'already gathered' in body['msg']
 
 
 #
@@ -297,6 +405,32 @@ def test_recycling_pays_once_before_any_credit(world):
         ('profession',),
         ('item_delete',),
         ]
+
+
+@pytest.mark.parametrize('slotname', SLOTS)
+def test_recycling_equipped_item_is_free(world, slotname):
+    # Recycling deleted it and left its slot pointing at nothing
+    item = _item(world, 'Common')
+    world.creature.slots = types.SimpleNamespace(**{name: None for name in SLOTS})
+    setattr(world.creature.slots, slotname, types.SimpleNamespace(id=item.id))
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'is equipped' in body['msg']
+
+
+def test_recycling_item_equipped_elsewhere_is_done(world):
+    # Another Item in the slots, empty slots (None, or id None): not this one
+    item = _item(world, 'Common')
+    world.creature.slots = types.SimpleNamespace(**{name: None for name in SLOTS})
+    world.creature.slots.righthand = types.SimpleNamespace(id=uuid.uuid4())
+    world.creature.slots.head = types.SimpleNamespace(id=None)
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    assert body['success'] is True
+    assert ('item_delete',) in world.events
 
 
 def test_recycling_zero_shards_still_pays_once(world):

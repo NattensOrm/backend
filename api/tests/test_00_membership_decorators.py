@@ -180,6 +180,106 @@ def test_same_group_calls_the_view(run):
 
 
 #
+# Instance decorators (utils.decorators check_creature_in_instance,
+# routes._decorators.belongs creature_in_instance). Creature.instance always
+# exists (default None), so the former hasattr() guard always passed: a
+# Creature out of any Instance was only refused by the lookup of Instance
+# None, with "InstanceUUID(None) NOTFOUND". Same answer code, now an
+# explicit check and an accurate message, and no lookup.
+#
+INSTANCE_ID = uuid.uuid4()
+INSTANCE_CASES = [
+    ('utils', 'check_creature_in_instance'),
+    ('belongs', 'creature_in_instance'),
+    ]
+
+
+class _Instances(list):
+    """ InstanceDocument.objects(): truthy when found, get() or DoesNotExist. """
+    def get(self):
+        if not self:
+            raise _InstanceDocument.DoesNotExist()
+        return self[0]
+
+
+class _InstanceDocument:
+    class DoesNotExist(Exception):
+        pass
+
+    stored = {}
+    lookups = []
+
+    @classmethod
+    def objects(cls, _id=None):
+        cls.lookups.append(_id)
+        return _Instances([cls.stored[_id]] if _id in cls.stored else [])
+
+
+@pytest.fixture(params=INSTANCE_CASES, ids=[f'{case[0]}.{case[1]}' for case in INSTANCE_CASES])
+def run_instance(request, modules, monkeypatch):
+    """
+    Wraps a recording view with the instance decorator under test, with
+    InstanceDocument faked. Returns call(instance) -> (result, calls, lookups),
+    where instance is the Creature's instance field.
+    """
+    module_key, decorator_name = request.param
+    module = modules[module_key]
+    monkeypatch.setattr(module, 'InstanceDocument', _InstanceDocument)
+    monkeypatch.setattr(_InstanceDocument, 'stored', {
+        INSTANCE_ID: types.SimpleNamespace(id=INSTANCE_ID),
+        })
+    monkeypatch.setattr(_InstanceDocument, 'lookups', [])
+    decorator = getattr(module, decorator_name)
+    app = Flask(__name__)
+
+    def call(instance):
+        calls = []
+
+        @decorator
+        def view():
+            calls.append(g.Instance.id)
+            return 'called'
+
+        with app.app_context():
+            g.Creature = types.SimpleNamespace(id=CREATURE_ID, instance=instance)
+            result = view()
+            if isinstance(result, tuple):
+                response, status = result
+                result = (response.get_json(), status)
+        return result, calls, _InstanceDocument.lookups
+
+    return call
+
+
+def test_out_of_any_instance_is_refused_without_lookup(run_instance):
+    result, calls, lookups = run_instance(None)
+    assert result == ({
+        "success": False,
+        "msg": f'[Creature.id:{CREATURE_ID}] Creature not in an Instance',
+        "payload": None,
+        }, 200)
+    assert calls == []
+    assert lookups == []
+
+
+def test_unknown_instance_is_refused(run_instance):
+    other = uuid.uuid4()
+    result, calls, _ = run_instance(other)
+    assert result == ({
+        "success": False,
+        "msg": f'[Instance.id:None] InstanceUUID({other}) NOTFOUND',
+        "payload": None,
+        }, 200)
+    assert calls == []
+
+
+def test_in_an_instance_calls_the_view(run_instance):
+    result, calls, _ = run_instance(INSTANCE_ID)
+    assert result == 'called'
+    assert calls == [INSTANCE_ID]
+
+
+#
 # Isolation: runs last in this file, after every use of the modules fixture
 #
 def test_isolation_leaves_no_stub_bound_module():
