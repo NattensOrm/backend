@@ -14,6 +14,7 @@ from utils.decorators import (
     )
 from utils.pa import equip_cost, instance_tick, pa_shortfall_colour
 from utils.redis import r, get_pa, consume_pa
+from utils.resolver import notify_gear_changed
 from variables import metaIndexed
 
 #
@@ -302,6 +303,8 @@ def equip(creatureuuid, type, slotname, itemuuid):
     except Exception as e:
         msg = (f'{g.h} Equip Queue KO [{e}]')
         logger.error(msg)
+
+    notify_gear_changed(g.Creature, 'equip')
 
     # JOB IS DONE
     msg = f'{g.h} Equip Query OK'
