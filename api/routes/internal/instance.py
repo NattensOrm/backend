@@ -10,6 +10,7 @@ from flask import jsonify, request
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
+from mongo.models.Corpse import CorpseDocument
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
 from mongo.utils import JSON_OPTIONS, utcnow
@@ -191,7 +192,8 @@ def _remove_gone(h: str, call: InternalCallSchema, why: str):
 # - Creature unknown or not in exactly <instanceid>: {"result": "gone"}, nothing touched;
 # - a Singouin (has an account): 400, it goes through /eject;
 # - otherwise the monster is removed as instance close does it: AI kill, Redis
-#   keys purged, Creature deleted last. No Discord notice, corpse or rewards.
+#   keys purged, Creature deleted last. It leaves a Corpse (ruling Q105, see
+#   below). No Discord notice or rewards.
 # The resolver retries on 5xx only, so an internal failure is never a 200.
 @internal.token
 @check_is_json
@@ -251,6 +253,25 @@ def remove(instanceid, creatureid):
             )
         # Nothing of a dead mob may outlive it: its PA pools and actives go
         purge_creature_keys(creatureuuid=Creature.id, instanceuuid=Instance.id)
+        # Every dead monster leaves a Corpse, kept until the instance closes or
+        # it is skinned (ruling Q105, Lordslair 2026-10-29). It takes the
+        # Creature id: a retry after a later failure saves the same document
+        # again (save() on an existing _id replaces it), never a second Corpse.
+        # Saved as late as possible: only a failed Creature.delete() lets a
+        # retry write it again, possibly after it was skinned
+        CorpseDocument(
+            _id=Creature.id,
+            account=None,
+            gender=Creature.gender,
+            instance=Instance.id,
+            killer=call.by,
+            level=Creature.level,
+            name=Creature.name,
+            race=Creature.race,
+            rarity=Creature.rarity,
+            x=Creature.x,
+            y=Creature.y,
+            ).save()
         # ALWAYS KILL CREATURE THE LAST
         Creature.delete()
     except Exception as e:

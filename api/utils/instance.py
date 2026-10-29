@@ -5,6 +5,7 @@ import json
 from loguru import logger
 from mongoengine import Q
 
+from mongo.models.Corpse import CorpseDocument
 from mongo.models.Creature import CreatureDocument
 from mongo.models.Instance import InstanceDocument
 from mongo.utils import JSON_OPTIONS, utcnow
@@ -28,7 +29,7 @@ def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> st
     - detach the Creature (instance/x/y None);
     - purge every Redis key of the Creature (PA pools, actives, ammo);
     - if the Creature was the last player: kill every monster (ai-creature
-      pubsub, then delete) and delete the Instance.
+      pubsub, then delete), delete the Instance Corpses and the Instance.
 
     :param creature: The leaving Creature.
     :param instance: The Instance being left.
@@ -94,6 +95,9 @@ def leave_instance(creature: CreatureDocument, instance: InstanceDocument) -> st
         # We kill it
         # ALWAYS KILL CREATURE THE LAST
         Monster.delete()
+
+    # A Corpse lasts until its instance closes (ruling Q105)
+    CorpseDocument.objects(instance=instance.id).delete()
 
     instance.delete()
     # A deleted Instance takes everything scoped by it with it, whoever the bearer
