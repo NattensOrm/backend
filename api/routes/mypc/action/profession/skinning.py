@@ -7,6 +7,7 @@ from flask_jwt_extended import jwt_required
 from loguru import logger
 
 from mongo.models.Corpse import CorpseDocument
+from mongo.models.Creature import CreatureDocument
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
@@ -19,7 +20,7 @@ from routes.mypc.action.profession._tools import (
     profession_scaled,
     )
 from utils.pa import instance_tick
-from utils.redis import get_pa
+from utils.redis import consume_pa, get_pa
 from variables import rarity_array
 
 #
@@ -30,6 +31,41 @@ PA_COST_BLUE = 2
 PROFESSION_NAME = 'skinning'
 
 
+def can_skin(skinner, corpse) -> bool:
+    """
+    Who may skin a Corpse (ruling Q105, Lordslair 2026-10-29): its killer and
+    the killer's Squad.
+
+    - the killer always may;
+    - no killer (corpse.killer None): nobody may (Q105 point 5, ruled
+      Lordslair 2026-10-29: "personne");
+    - a killer without a Squad (or only invited, rank 'Pending'): the killer
+      alone (Q105 point 5, ruled Lordslair 2026-10-29: "lui seul");
+    - otherwise a member of the killer's Squad, read now, at skinning time.
+      A Pending invitee is not a member (ruling 2026-10-10).
+    An unknown killer Creature (deleted since) leaves nobody but itself.
+    """
+    if corpse.killer is None:
+        return False
+    if str(skinner.id) == str(corpse.killer):
+        return True
+
+    killer = CreatureDocument.objects(_id=corpse.killer).first()
+    if killer is None:
+        return False
+
+    killer_squad = getattr(killer.squad, 'id', None)
+    if killer_squad is None or getattr(killer.squad, 'rank', None) == 'Pending':
+        return False
+
+    skinner_squad = getattr(skinner.squad, 'id', None)
+    return (
+        skinner_squad is not None
+        and str(skinner_squad) == str(killer_squad)
+        and getattr(skinner.squad, 'rank', None) != 'Pending'
+        )
+
+
 #
 # Routes /mypc/<uuid:creatureuuid>/action
 #
@@ -38,7 +74,8 @@ PROFESSION_NAME = 'skinning'
 # Custom decorators
 @exists.creature
 @belongs.creature_in_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the Corpse is claimed (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 def skinning(creatureuuid, resourceuuid):
 
     # Check if the corpse exists
@@ -46,6 +83,20 @@ def skinning(creatureuuid, resourceuuid):
         Corpse = CorpseDocument.objects(_id=resourceuuid).get()
     except CorpseDocument.DoesNotExist:
         msg = f'{g.h} CorpseUUID({resourceuuid}) NotFound'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    # x/y default to None on both documents: without a position there is no
+    # range to check, so it is a refusal (the distance below would raise)
+    positions = (Corpse.x, Corpse.y, g.Creature.x, g.Creature.y)
+    if any(position is None for position in positions):
+        msg = f'{g.h} CorpseUUID({resourceuuid}) range unknown (no position)'
         logger.warning(msg)
         return jsonify(
             {
@@ -65,6 +116,51 @@ def skinning(creatureuuid, resourceuuid):
                 "payload": None,
             }
         ), 200
+
+    if str(Corpse.instance) != str(g.Creature.instance):
+        msg = f'{g.h} CorpseUUID({resourceuuid}) not in this instance'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    if not can_skin(g.Creature, Corpse):
+        msg = f'{g.h} CorpseUUID({resourceuuid}) not skinnable by this creature'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    # Atomic claim, before anything is credited: of two concurrent skinners,
+    # only the one whose delete removes the Corpse goes on
+    if CorpseDocument.objects(_id=Corpse.id).delete() == 0:
+        msg = f'{g.h} CorpseUUID({resourceuuid}) already skinned'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+    logger.trace(f'{g.h} Corpse claim OK')
+
+    # A refusal is free, PA are only spent on a done action (Lordslair
+    # 2026-10-29): consumed here, by the skinner who claimed the Corpse
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
 
     Profession = ProfessionDocument.objects(_id=creatureuuid).get()
 
@@ -110,13 +206,6 @@ def skinning(creatureuuid, resourceuuid):
     # for resource_data in satchel['resources'].values():
     #    for resource in resource_data.values():
     #        slots_used += resource
-
-    try:
-        Corpse.delete()
-    except Exception as e:
-        logger.error(f'{g.h} Corpse destroy KO (failed or no corpse was deleted) [{e}]')
-    else:
-        logger.trace(f'{g.h} Corpse destroy OK')
 
     # We're done
     msg = f'{g.h} Profession ({PROFESSION_NAME}) Query OK'
