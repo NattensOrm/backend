@@ -7,6 +7,9 @@
             },
             "inventory":null
         },
+        "product":{
+            "consumable":[2, 3]
+        },
         "id":1,
         "hs":"craft_potion",
         "name":"Banana Milkshake",

@@ -47,6 +47,7 @@ class HighscoreProfession(EmbeddedDocument):
     Fields:
     - gathering (IntField)
     - mining    (IntField)
+    - mixology  (IntField)
     - recycling (IntField)
     - skinning  (IntField)
     - tanning   (IntField)
@@ -54,6 +55,7 @@ class HighscoreProfession(EmbeddedDocument):
     """
     gathering = IntField(required=True, default=0)
     mining = IntField(required=True, default=0)
+    mixology = IntField(required=True, default=0)
     recycling = IntField(required=True, default=0)
     skinning = IntField(required=True, default=0)
     tanning = IntField(required=True, default=0)

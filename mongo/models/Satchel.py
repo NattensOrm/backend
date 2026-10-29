@@ -98,6 +98,23 @@ class SatchelAmmo(EmbeddedDocument):
     shell = IntField(required=True, default=0)
 
 
+class SatchelConsumable(EmbeddedDocument):
+    """
+    Define the embedded document for: Satchel.consumable
+
+    Heals crafted by the mixology profession, by consumables meta (design
+    ruling Q78). The standard heal (meta 1) is plain currency, never
+    crafted, so it has no field. fight-resolver reads and spends these
+    paths (consumable.fast / consumable.long): do not rename them.
+
+    Fields:
+    - fast      (IntField) - consumables meta 2
+    - long      (IntField) - consumables meta 3
+    """
+    fast = IntField(required=True, default=0)
+    long = IntField(required=True, default=0)
+
+
 class SatchelCurrency(EmbeddedDocument):
     """
     Define the embedded document for: Satchel.currency
@@ -117,6 +134,8 @@ class SatchelDocument(Document):
     Fields:
     - _id       (UUIDField)
     - ammo      (EmbeddedDocumentField)
+    - consumable (EmbeddedDocumentField) - optional: older satchels lack it,
+                                           readers treat it as all 0
     - currency  (EmbeddedDocumentField)
     - resource  (EmbeddedDocumentField)
     - shard     (EmbeddedDocumentField)
@@ -124,6 +143,7 @@ class SatchelDocument(Document):
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     ammo = EmbeddedDocumentField(SatchelAmmo, required=True)
+    consumable = EmbeddedDocumentField(SatchelConsumable)
     currency = EmbeddedDocumentField(SatchelCurrency, required=True)
     resource = EmbeddedDocumentField(SatchelResource, required=True)
     shard = EmbeddedDocumentField(SatchelShard, required=True)
