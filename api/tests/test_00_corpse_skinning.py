@@ -165,12 +165,12 @@ def world(mongo, monkeypatch):
     route = _load('test_corpse_skinning_route', SKINNING_ROUTE)
     app = Flask(__name__)
 
-    def corpse(killer, instance=INSTANCE_ID):
+    def corpse(killer, instance=INSTANCE_ID, x=1, y=1):
         """ Saves a Corpse at (1, 1); killer is a Creature, a raw id, or None. """
         killer_id = getattr(killer, 'id', killer)
         return corpse_model.CorpseDocument(
             gender=True, instance=instance, killer=killer_id,
-            name='Monster', race=11, rarity='Big', x=1, y=1,
+            name='Monster', race=11, rarity='Big', x=x, y=y,
             ).save()
 
     def add(creature):
@@ -233,6 +233,29 @@ def test_out_of_range_is_refused(world):
     code, body = world.skin(killer, corpse)
 
     _assert_refused(world, corpse, code, body, 'not in range')
+
+
+@pytest.mark.parametrize('x, y', [(None, 1), (1, None), (None, None)])
+def test_corpse_without_position_is_refused(world, x, y):
+    # Lordslair 2026-10-29: the range check raised (HTTP 500) on such a Corpse
+    killer = world.add(_creature())
+    corpse = world.corpse(killer, x=x, y=y)
+
+    code, body = world.skin(killer, corpse)
+
+    _assert_refused(world, corpse, code, body, 'no position')
+
+
+@pytest.mark.parametrize('attribute', ['x', 'y'])
+def test_skinner_without_position_is_refused(world, attribute):
+    # Same distance, same crash: a skinner without a position is refused too
+    killer = world.add(_creature())
+    setattr(killer, attribute, None)
+    corpse = world.corpse(killer)
+
+    code, body = world.skin(killer, corpse)
+
+    _assert_refused(world, corpse, code, body, 'no position')
 
 
 def test_killer_skins(world):
