@@ -44,7 +44,8 @@ def check_creature_in_instance(func):
     """ Decorator to check if a Creature is in an Instance. """
     def wrapper(*args, **kwargs):
         try:
-            if hasattr(g.Creature, 'instance'):
+            # The field always exists (default None): its value tells, not hasattr()
+            if g.Creature.instance is not None:
                 logger.trace(f'[Creature.id:{g.Creature.id}] Creature in an Instance')
             else:
                 msg = f'[Creature.id:{g.Creature.id}] Creature not in an Instance'

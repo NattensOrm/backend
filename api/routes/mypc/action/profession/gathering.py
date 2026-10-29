@@ -28,6 +28,20 @@ from variables import rarity_array
 PA_COST_RED = 0
 PA_COST_BLUE = 4
 PROFESSION_NAME = 'gathering'
+# How far a Resource may be gathered from, in cells on both axes (0: own cell
+# only). Lordslair 2026-10-29: the same distance as skinning, for now
+GATHERING_RANGE = 1
+
+
+def in_gathering_range(creature, resource) -> bool:
+    """ True when the Resource is within GATHERING_RANGE of the Creature. """
+    # A Creature without a position has no range (x/y default to None)
+    if None in (creature.x, creature.y, resource.x, resource.y):
+        return False
+    return (
+        abs(resource.x - creature.x) <= GATHERING_RANGE
+        and abs(resource.y - creature.y) <= GATHERING_RANGE
+        )
 
 
 #
@@ -55,6 +69,42 @@ def gathering(creatureuuid, resourceuuid):
             }
         ), 200
 
+    if str(Resource.instance) != str(g.Creature.instance):
+        msg = f'{g.h} ResourceUUID({resourceuuid}) not in this instance'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    if not in_gathering_range(g.Creature, Resource):
+        msg = f'{g.h} ResourceUUID({resourceuuid}) not in range'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
+    # Atomic claim, before anything is credited: of two concurrent gatherers,
+    # only the one whose delete removes the Resource goes on
+    if ResourceDocument.objects(_id=Resource.id).delete() == 0:
+        msg = f'{g.h} ResourceUUID({resourceuuid}) already gathered'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+    logger.trace(f'{g.h} Resource claim OK')
+
     # A refusal is free, PA are spent once the action is validated, even if it
     # then fails (Lordslair + chifret 2026-10-29)
     consume_pa(
@@ -72,7 +122,7 @@ def gathering(creatureuuid, resourceuuid):
     varz = probabilistic_binary(g.Creature.stats.total.m)   # between 0 and 1
 
     # We tune a bit vary to have a better distribution
-    for _ in range(profession_scaled(Profession.skinning)):
+    for _ in range(profession_scaled(Profession.gathering)):
         vary += random.randint(1, 2)
 
     quantity = varx + vary + varz
@@ -97,13 +147,7 @@ def gathering(creatureuuid, resourceuuid):
     )
     Satchel.reload()
 
-    # We delete the Resource in DB
-    try:
-        Resource.delete()
-    except Exception as e:
-        logger.error(f'{g.h} Resource destroy KO (failed or no resource was deleted) [{e}]')
-    else:
-        logger.trace(f'{g.h} Resource destroy OK')
+    # The Resource is already gone: the claim above deleted it
 
     # We're done
     msg = f'{g.h} Profession ({PROFESSION_NAME}) Query OK'
