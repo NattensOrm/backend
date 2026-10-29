@@ -8,6 +8,8 @@ import sys
 import types
 import uuid
 
+import mongoengine
+import mongomock
 import pytest
 from flask import Flask
 
@@ -15,6 +17,7 @@ from flask import Flask
 # resolved from this file so it works whatever the cwd pytest runs from)
 LOCAL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(LOCAL_PATH)
+CORPSE_MODEL = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'models', 'Corpse.py')
 
 # Designer ruling Q99 (2026-10-10): a dead monster is removed from the map at
 # once. The fight resolver calls POST /internal/instance/<i>/creature/<c>/remove,
@@ -34,6 +37,7 @@ SINGOUIN_ID = uuid.uuid4()
 # imports the Mongo models (directly and through utils.decorators /
 # utils.instance), and the real mongo package connects at import
 MODEL_STUBS = {
+    'mongo.models.Corpse': ['CorpseDocument'],
     'mongo.models.Creature': ['CreatureDocument'],
     'mongo.models.Instance': ['InstanceDocument'],
     'mongo.models.Item': ['ItemDocument'],
@@ -102,6 +106,24 @@ def modules(monkeypatch):
                 setattr(parent_module, child, attribute)
 
 
+@pytest.fixture
+def corpse_model():
+    """
+    The real Corpse model, loaded straight from its file (the mongo package
+    connects at import) on an in-memory mongomock for the default alias, so
+    its save() and queryset delete() run for real. Dropped after the test.
+    """
+    spec = importlib.util.spec_from_file_location('test_internal_remove_corpse', CORPSE_MODEL)
+    model = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(model)
+    mongoengine.connect(
+        'pytest', alias='default', mongo_client_class=mongomock.MongoClient,
+        uuidRepresentation='standard',
+        )
+    yield model
+    mongoengine.disconnect(alias='default')
+
+
 class _Collection:
     """ Stands for Document.objects: objects(_id=x).first() reads a dict by id. """
     def __init__(self, documents):
@@ -121,21 +143,30 @@ def _document(events, store, _id, instance, account=None, delete_error=None):
     return types.SimpleNamespace(
         id=_id,
         account=account,
+        gender=True,
         instance=instance,
+        level=3,
+        name='Monster',
+        race=11,
+        rarity='Big',
+        x=4,
+        y=5,
         to_json=lambda json_options=None: json.dumps({"_id": str(_id), "name": 'Monster'}),
         delete=delete,
         )
 
 
 @pytest.fixture
-def world(modules, monkeypatch):
+def world(modules, corpse_model, monkeypatch):
     """
     Runs the remove view on a minimal Flask app. Creatures and Instances live
     in dicts; r.publish(), purge_creature_keys() and Creature.delete() append
     to `events` in call order. failures['publish'] / failures['purge'] set to
-    an exception make that call raise instead.
+    an exception make that call raise instead. Corpses are real documents on
+    mongomock, read back with corpses().
     """
     route = modules.route
+    monkeypatch.setattr(route, 'CorpseDocument', corpse_model.CorpseDocument)
     events = []
     creatures = {}
     instances = {
@@ -184,9 +215,12 @@ def world(modules, monkeypatch):
                 }
         return client.post(f'/remove/{instanceid}/{creatureid}', headers=headers, json=body)
 
+    def corpses():
+        return list(corpse_model.CorpseDocument.objects())
+
     return types.SimpleNamespace(
         add=add, post=post, events=events, creatures=creatures, instances=instances,
-        failures=failures,
+        failures=failures, corpses=corpses,
         )
 
 
@@ -416,10 +450,115 @@ def test_remove_retry_after_delete_failure_is_removed(world):
 
 
 #
+# Corpse (ruling Q105, Lordslair 2026-10-29): every dead monster leaves one,
+# with the monster id, so a resolver retry never makes a second one
+#
+def _body(by):
+    return {
+        "reason": 'death',
+        "by": None if by is None else str(by),
+        "at": '2026-10-29T00:00:00',
+        "requestId": str(uuid.uuid4()),
+        }
+
+
+def test_remove_leaves_one_corpse_with_the_monster_fields(world):
+    killer = uuid.uuid4()
+    world.add(MONSTER_ID)
+
+    response = world.post(body=_body(killer))
+
+    assert response.status_code == 200
+    assert response.json['payload'] == {"result": 'removed'}
+    corpses = world.corpses()
+    assert len(corpses) == 1
+    corpse = corpses[0]
+    assert corpse.id == MONSTER_ID
+    assert corpse.account is None
+    assert corpse.instance == INSTANCE_ID
+    assert corpse.killer == killer
+    assert (corpse.gender, corpse.level, corpse.name, corpse.race, corpse.rarity) == (
+        True, 3, 'Monster', 11, 'Big')
+    assert (corpse.x, corpse.y) == (4, 5)
+
+
+def test_remove_without_killer_still_leaves_a_corpse(world):
+    # Q105 point 5: no killer, the corpse exists all the same (nobody may skin it)
+    world.add(MONSTER_ID)
+
+    response = world.post(body=_body(None))
+
+    assert response.status_code == 200
+    assert response.json['payload'] == {"result": 'removed'}
+    corpses = world.corpses()
+    assert len(corpses) == 1
+    assert corpses[0].id == MONSTER_ID
+    assert corpses[0].killer is None
+
+
+def test_remove_repeated_call_is_gone_and_makes_no_second_corpse(world):
+    world.add(MONSTER_ID)
+    assert world.post().json['payload'] == {"result": 'removed'}
+
+    response = world.post()
+
+    assert response.json['payload'] == {"result": 'gone'}
+    assert [corpse.id for corpse in world.corpses()] == [MONSTER_ID]
+
+
+def test_remove_gone_leaves_no_corpse(world):
+    world.add(MONSTER_ID, instance=OTHER_INSTANCE_ID)
+
+    assert world.post().json['payload'] == {"result": 'gone'}
+    assert world.post(creatureid=uuid.uuid4()).json['payload'] == {"result": 'gone'}
+
+    assert world.corpses() == []
+
+
+def test_remove_publish_failure_leaves_no_corpse(world):
+    world.add(MONSTER_ID)
+    world.failures['publish'] = ConnectionError('redis down')
+
+    assert world.post().status_code == 500
+
+    assert world.corpses() == []
+
+
+def test_remove_purge_failure_leaves_no_corpse(world):
+    # The corpse is saved after the purge: a retry can't revive a skinned one
+    world.add(MONSTER_ID)
+    world.failures['purge'] = ConnectionError('redis down')
+
+    assert world.post().status_code == 500
+
+    assert world.corpses() == []
+
+
+def test_remove_retry_after_failure_past_the_corpse_leaves_one_corpse(world):
+    killer = uuid.uuid4()
+    world.add(MONSTER_ID, delete_error=RuntimeError('mongo down'))
+
+    # The corpse is saved before the Creature delete: the failed call already left it
+    assert world.post(body=_body(killer)).status_code == 500
+    assert [corpse.id for corpse in world.corpses()] == [MONSTER_ID]
+
+    # The resolver retries once Mongo is back: same corpse, saved again
+    world.add(MONSTER_ID)
+    response = world.post(body=_body(killer))
+
+    assert response.status_code == 200
+    assert response.json['payload'] == {"result": 'removed'}
+    corpses = world.corpses()
+    assert [corpse.id for corpse in corpses] == [MONSTER_ID]
+    assert corpses[0].killer == killer
+
+
+#
 # Instance close (utils/instance.py): the kill reaches the AI on its env channel
 #
-def test_instance_close_publishes_kill_on_env_channel(modules, monkeypatch):
+def test_instance_close_publishes_kill_on_env_channel(modules, corpse_model, monkeypatch):
     utils_instance = modules.utils_instance
+    monkeypatch.setattr(utils_instance, 'CorpseDocument', corpse_model.CorpseDocument)
     events = []
 
     monster = types.SimpleNamespace(
@@ -461,6 +600,63 @@ def test_instance_close_publishes_kill_on_env_channel(modules, monkeypatch):
         ('delete', INSTANCE_ID),
         ('purge_instance', {"instanceuuid": INSTANCE_ID}),
         ]
+
+
+#
+# Instance close / leave and the Corpses (ruling Q105: a Corpse lasts until
+# its instance closes)
+#
+@pytest.fixture
+def leave(modules, corpse_model, monkeypatch):
+    """
+    Runs leave_instance() with Redis stubbed and no monster left. players is
+    the player count leave_instance() reads: 1 closes the Instance, 2 leaves it.
+    The Corpses are real documents on mongomock.
+    """
+    utils_instance = modules.utils_instance
+    model = corpse_model
+    monkeypatch.setattr(utils_instance, 'CorpseDocument', model.CorpseDocument)
+    monkeypatch.setattr(utils_instance, 'InstanceDocument', types.SimpleNamespace(
+        objects=lambda **kwargs: types.SimpleNamespace(update_one=lambda **kwargs: None)))
+    monkeypatch.setattr(utils_instance, 'r', types.SimpleNamespace(publish=lambda channel, data: None))  # noqa: E501
+    monkeypatch.setattr(utils_instance, 'purge_creature_keys', lambda **kwargs: None)
+    monkeypatch.setattr(utils_instance, 'purge_instance_keys', lambda **kwargs: None)
+
+    def corpse(instance):
+        return model.CorpseDocument(
+            gender=True, instance=instance, name='Monster', race=11,
+            ).save().id
+
+    def run(players):
+        results = iter([types.SimpleNamespace(count=lambda: players), []])
+        monkeypatch.setattr(utils_instance, 'CreatureDocument', types.SimpleNamespace(
+            objects=types.SimpleNamespace(filter=lambda query: next(results))))
+        leaver = types.SimpleNamespace(id=SINGOUIN_ID, save=lambda: None)
+        instance = types.SimpleNamespace(id=INSTANCE_ID, delete=lambda: None)
+        return utils_instance.leave_instance(leaver, instance)
+
+    def corpses():
+        return {document.id for document in model.CorpseDocument.objects()}
+
+    return types.SimpleNamespace(corpse=corpse, run=run, corpses=corpses)
+
+
+def test_instance_close_deletes_its_corpses_only(leave):
+    leave.corpse(INSTANCE_ID)
+    leave.corpse(INSTANCE_ID)
+    elsewhere = leave.corpse(OTHER_INSTANCE_ID)
+
+    assert leave.run(players=1) == 'closed'
+
+    assert leave.corpses() == {elsewhere}
+
+
+def test_instance_left_keeps_its_corpses(leave):
+    kept = {leave.corpse(INSTANCE_ID), leave.corpse(INSTANCE_ID)}
+
+    assert leave.run(players=2) == 'left'
+
+    assert leave.corpses() == kept
 
 
 #
