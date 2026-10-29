@@ -4,7 +4,7 @@ import os
 
 from loguru import logger
 
-from mongo.models.Meta import MetaArmor, MetaRace, MetaWeapon
+from mongo.models.Meta import MetaArmor, MetaRace, MetaRecipe, MetaWeapon
 
 # Grab the environment variables
 env_vars = {
@@ -92,11 +92,13 @@ Do not modifiy unless you're ready for consequences
 metaNames = {
     'armor': [doc.to_mongo().to_dict() for doc in MetaArmor.objects()],
     'weapon': [doc.to_mongo().to_dict() for doc in MetaWeapon.objects()],
-    'race': [doc.to_mongo().to_dict() for doc in MetaRace.objects()]
+    'race': [doc.to_mongo().to_dict() for doc in MetaRace.objects()],
+    'recipe': [doc.to_mongo().to_dict() for doc in MetaRecipe.objects()],
 }
 
 metaIndexed = {
     'armor': {armor["_id"]: armor for armor in metaNames['armor']},
     'weapon': {weapon["_id"]: weapon for weapon in metaNames['weapon']},
     'race': {race["_id"]: race for race in metaNames['race']},
+    'recipe': {recipe["_id"]: recipe for recipe in metaNames['recipe']},
 }
