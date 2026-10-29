@@ -109,6 +109,12 @@ def modules(monkeypatch):
     redis_stub.consume_pa = None
     monkeypatch.setitem(sys.modules, 'utils.redis', redis_stub)
 
+    # The Item lock is tested in test_00_item_lock.py: always granted here
+    item_lock = types.ModuleType('utils.item_lock')
+    item_lock.lock_item = lambda itemuuid: True
+    item_lock.unlock_item = lambda itemuuid: None
+    monkeypatch.setitem(sys.modules, 'utils.item_lock', item_lock)
+
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: _identity)
     # equip.py reads only metaIndexed from variables: an explicit stub, so the
     # test does not depend on conftest having imported tests/variables.py

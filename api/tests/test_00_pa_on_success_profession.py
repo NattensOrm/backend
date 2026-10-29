@@ -88,6 +88,9 @@ def world(monkeypatch):
     refuse = set()
     state = types.SimpleNamespace(
         resource=None, skin=10, redis_error=False, claim_lost=False, scaled=[],
+        # Recycling: the Item lock, the Creature as read again from the DB
+        # (None: the same as g.Creature), and whether the Item is still there
+        item_lock_free=True, locks=[], db_creature=None, item_gone=False,
         )
 
     def pa(red=0, blue=0, consume=False):
@@ -168,7 +171,35 @@ def world(monkeypatch):
         )
     _module(
         'mongo.models.Creature', monkeypatch,
+        CreatureDocument=types.SimpleNamespace(
+            objects=lambda _id=None: types.SimpleNamespace(
+                get=lambda: state.db_creature or creature,
+                ),
+            ),
         CreatureSlots=types.SimpleNamespace(_fields={name: None for name in SLOTS}),
+        )
+
+    def item_delete():
+        if state.item_gone:
+            return 0
+        events.append(('item_delete',))
+        return 1
+
+    _module(
+        'mongo.models.Item', monkeypatch,
+        ItemDocument=types.SimpleNamespace(
+            objects=lambda _id=None: types.SimpleNamespace(delete=item_delete),
+            ),
+        )
+
+    def lock_item(itemuuid):
+        state.locks.append(('lock', itemuuid))
+        return state.item_lock_free
+
+    _module(
+        'utils.item_lock', monkeypatch,
+        lock_item=lock_item,
+        unlock_item=lambda itemuuid: state.locks.append(('unlock', itemuuid)),
         )
     _module(
         'mongo.models.Satchel', monkeypatch,
@@ -248,11 +279,7 @@ def _resource(world, rarity, x=1, y=1, instance=None):
 
 
 def _item(world, rarity):
-    return types.SimpleNamespace(
-        id=uuid.uuid4(),
-        rarity=rarity,
-        delete=lambda: world.events.append(('item_delete',)),
-        )
+    return types.SimpleNamespace(id=uuid.uuid4(), rarity=rarity)
 
 
 def _pa_events(world):
@@ -398,13 +425,16 @@ def test_recycling_pays_once_before_any_credit(world):
 
     assert code == 200
     assert body['success'] is True
+    # The Item is deleted first (the claim), then paid for, then credited
     assert world.events == [
+        ('item_delete',),
         ('pa', world.creature.id, 0, 2, TICK),
         ('highscore',),
         ('satchel',),
         ('profession',),
-        ('item_delete',),
         ]
+    # Locked first; a deleted Item has no lock left to release
+    assert world.state.locks == [('lock', item.id)]
 
 
 @pytest.mark.parametrize('slotname', SLOTS)
@@ -418,6 +448,47 @@ def test_recycling_equipped_item_is_free(world, slotname):
 
     _assert_refused_free(world, code, body)
     assert 'is equipped' in body['msg']
+    # The lock taken to read the slots is released: the Item stays usable
+    assert world.state.locks == [('lock', item.id), ('unlock', item.id)]
+
+
+def test_recycling_reads_the_slots_again_once_locked(world):
+    # Lordslair 2026-10-29: an equip that ended after this request loaded the
+    # Creature must not let an equipped Item be recycled
+    item = _item(world, 'Common')
+    world.state.db_creature = types.SimpleNamespace(
+        slots=types.SimpleNamespace(**{name: None for name in SLOTS}),
+        )
+    world.state.db_creature.slots.righthand = types.SimpleNamespace(id=item.id)
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'is equipped' in body['msg']
+
+
+def test_recycling_of_a_locked_item_is_free(world):
+    # Lordslair 2026-10-29: another recycling or an equip holds the Item
+    item = _item(world, 'Common')
+    world.state.item_lock_free = False
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'busy or already recycled' in body['msg']
+    assert world.state.locks == [('lock', item.id)]
+
+
+def test_recycling_of_an_item_already_deleted_is_free(world):
+    # Lordslair 2026-10-29: two recyclings of one Item credit the shards once.
+    # The loser's delete removes nothing: refused, unpaid, uncredited
+    item = _item(world, 'Common')
+    world.state.item_gone = True
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    _assert_refused_free(world, code, body)
+    assert 'already recycled' in body['msg']
 
 
 def test_recycling_item_equipped_elsewhere_is_done(world):

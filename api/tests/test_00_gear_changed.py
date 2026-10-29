@@ -222,6 +222,12 @@ def routes(monkeypatch, variables):
     redis_stub.consume_pa = None
     monkeypatch.setitem(sys.modules, 'utils.redis', redis_stub)
 
+    # Always granted, recorded by the world fixture (the lock itself: test_00_item_lock.py)
+    item_lock = types.ModuleType('utils.item_lock')
+    item_lock.lock_item = lambda itemuuid: True
+    item_lock.unlock_item = lambda itemuuid: None
+    monkeypatch.setitem(sys.modules, 'utils.item_lock', item_lock)
+
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: _identity)
 
     equip = _load('test_gear_equip_route', os.path.join(INVENTORY_ROUTES, 'equip.py'))
@@ -271,7 +277,17 @@ def world(routes, monkeypatch):
         monkeypatch.setattr(module, 'r', types.SimpleNamespace(
             publish=lambda channel, data: events.append(('publish', channel)),
             ))
-    monkeypatch.setattr(routes.equip, 'consume_pa', lambda **kwargs: None)
+    monkeypatch.setattr(routes.equip, 'consume_pa', lambda **kwargs: events.append('consume_pa'))
+    lock = types.SimpleNamespace(free=True)
+
+    def lock_item(itemuuid):
+        events.append(('lock', itemuuid))
+        return lock.free
+
+    monkeypatch.setattr(routes.equip, 'lock_item', lock_item, raising=False)
+    monkeypatch.setattr(
+        routes.equip, 'unlock_item', lambda itemuuid: events.append(('unlock', itemuuid)), raising=False,
+        )
 
     app = Flask(__name__)
 
@@ -290,6 +306,7 @@ def world(routes, monkeypatch):
         creature=creature,
         item=item,
         events=events,
+        lock=lock,
         )
 
 
@@ -316,6 +333,39 @@ def test_equip_refused_does_not_notify(world, type, slotname):
 
     assert body['success'] is False
     assert _notifies(world.events) == []
+
+
+def test_equip_holds_the_item_lock_around_the_save(world):
+    # Lordslair 2026-10-29: an equip racing a recycling of the same Item must
+    # not pass; both routes lock the Item (utils/item_lock.py)
+    code, body = world.equip('weapon', 'righthand')
+
+    assert body['success'] is True
+    assert world.events[:3] == [('lock', ITEM_ID), 'save', ('unlock', ITEM_ID)]
+    assert world.events.index(('unlock', ITEM_ID)) < world.events.index('consume_pa')
+
+
+def test_equip_of_a_locked_item_is_free(world):
+    # A recycling holds the Item (or deleted it): no slot written, no PA, no notify
+    world.lock.free = False
+
+    code, body = world.equip('weapon', 'righthand')
+
+    assert code == 200
+    assert body['success'] is False
+    assert 'busy or gone' in body['msg']
+    assert world.events == [('lock', ITEM_ID)]
+
+
+def test_equip_releases_the_lock_when_the_save_fails(world):
+    def failing_save():
+        raise RuntimeError('Mongo down')
+    world.creature.save = failing_save
+
+    with pytest.raises(RuntimeError):
+        world.equip('weapon', 'righthand')
+
+    assert world.events == [('lock', ITEM_ID), ('unlock', ITEM_ID)]
 
 
 def test_unequip_success_notifies_after_save(world):
