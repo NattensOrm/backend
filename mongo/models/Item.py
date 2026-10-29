@@ -48,6 +48,8 @@ class ItemDocument(Document):
     bound = BooleanField(required=True, default=True)
     bound_type = StringField(required=True, default='BoP')
     created = DateTimeField(default=utcnow)
+    # Set while an equip or a recycling holds the Item (api/utils/item_lock.py)
+    locked = DateTimeField(default=None)
     metatype = StringField(required=True)
     metaid = IntField(required=True)
     modded = BooleanField(required=True, default=False)

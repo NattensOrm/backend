@@ -5,8 +5,9 @@ from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
-from mongo.models.Creature import CreatureSlots
+from mongo.models.Creature import CreatureDocument, CreatureSlots
 from mongo.models.Highscore import HighscoreDocument
+from mongo.models.Item import ItemDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
 from mongo.utils import utcnow
@@ -17,6 +18,7 @@ from routes.mypc.action.profession._tools import (
     profession_gain,
     profession_scaled,
     )
+from utils.item_lock import lock_item, unlock_item
 from utils.pa import instance_tick
 from utils.redis import consume_pa, get_pa
 from variables import rarity_array
@@ -54,9 +56,25 @@ def is_equipped(creature, item) -> bool:
 @exists.item
 @belongs.item_to_creature
 def recycling(creatureuuid, itemuuid):
+    # Held until the Item is deleted: of two recyclings, or of an equip and a
+    # recycling, of this Item, only one goes on (see utils/item_lock.py)
+    if not lock_item(g.Item.id):
+        msg = f'{g.h} ItemUUID({itemuuid}) busy or already recycled'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
     # An equipped Item must be unequipped first: recycling deletes it, which
-    # would leave its slot pointing at nothing
-    if is_equipped(g.Creature, g.Item):
+    # would leave its slot pointing at nothing. The slots are read again, now
+    # that the Item is locked: an equip that ended meanwhile is seen here
+    Creature = CreatureDocument.objects(_id=g.Creature.id).get()
+    if is_equipped(Creature, g.Item):
+        unlock_item(g.Item.id)
         msg = f'{g.h} ItemUUID({itemuuid}) is equipped'
         logger.warning(msg)
         return jsonify(
@@ -66,6 +84,19 @@ def recycling(creatureuuid, itemuuid):
                 "payload": None,
             }
         ), 200
+
+    # Deleted before anything is credited, by the lock holder only
+    if ItemDocument.objects(_id=g.Item.id).delete() == 0:
+        msg = f'{g.h} ItemUUID({itemuuid}) already recycled'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+    logger.trace(f'{g.h} Item destroy OK')
 
     # A refusal is free, PA are spent once the action is validated, even if it
     # then fails (Lordslair + chifret 2026-10-29)
@@ -106,13 +137,6 @@ def recycling(creatureuuid, itemuuid):
 
     # We update the Profession score
     profession_gain(g.Creature.id, PROFESSION_NAME, Profession.recycling)
-
-    try:
-        g.Item.delete()
-    except Exception as e:
-        logger.error(f'{g.h} Item destroy KO (failed or no item was deleted) [{e}]')
-    else:
-        logger.trace(f'{g.h} Item destroy OK')
 
     # We're done
     msg = f'{g.h} Profession ({PROFESSION_NAME}) Query OK'
