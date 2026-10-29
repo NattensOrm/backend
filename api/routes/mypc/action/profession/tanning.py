@@ -13,7 +13,7 @@ from mongo.utils import utcnow
 from routes._decorators import exists, belongs
 from routes.mypc.action.profession._tools import profession_gain
 from utils.pa import instance_tick
-from utils.redis import get_pa
+from utils.redis import consume_pa, get_pa
 
 #
 # Profession.tanning specifics
@@ -31,7 +31,8 @@ PROFESSION_NAME = 'tanning'
 # Custom decorators
 @exists.creature
 @belongs.creature_out_of_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the tanning is validated (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 def tanning(creatureuuid):
     Satchel = SatchelDocument.objects(_id=creatureuuid).get()
 
@@ -47,6 +48,15 @@ def tanning(creatureuuid):
                 },
             }
         ), 200
+
+    # A refusal is free, PA are spent once the action is validated, even if it
+    # then fails (Lordslair + chifret 2026-10-29)
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
 
     # To check what's going to be created
     resource_tanned = {'fur': 0, 'leather': 0}

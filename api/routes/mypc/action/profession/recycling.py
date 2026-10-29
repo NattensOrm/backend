@@ -17,7 +17,7 @@ from routes.mypc.action.profession._tools import (
     profession_scaled,
     )
 from utils.pa import instance_tick
-from utils.redis import get_pa
+from utils.redis import consume_pa, get_pa
 from variables import rarity_array
 
 #
@@ -36,10 +36,20 @@ PROFESSION_NAME = 'recycling'
 # Custom decorators
 @exists.creature
 @belongs.creature_out_of_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the Item checks passed (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 @exists.item
 @belongs.item_to_creature
 def recycling(creatureuuid, itemuuid):
+    # A refusal is free, PA are spent once the action is validated, even if it
+    # then fails (Lordslair + chifret 2026-10-29)
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
+
     Profession = ProfessionDocument.objects(_id=creatureuuid).get()
 
     varx = 5 - rarity_array['item'].index(g.Item.rarity)   # between 0 and 5
