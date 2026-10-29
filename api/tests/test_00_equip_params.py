@@ -111,8 +111,8 @@ def modules(monkeypatch):
 
     # The Item lock is tested in test_00_item_lock.py: always granted here
     item_lock = types.ModuleType('utils.item_lock')
-    item_lock.lock_item = lambda itemuuid: True
-    item_lock.unlock_item = lambda itemuuid: None
+    item_lock.lock_item = lambda itemuuid: 'token'
+    item_lock.unlock_item = lambda itemuuid, token: None
     monkeypatch.setitem(sys.modules, 'utils.item_lock', item_lock)
 
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: _identity)

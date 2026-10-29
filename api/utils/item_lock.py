@@ -19,17 +19,30 @@ from mongo.utils import utcnow
 # - recycling holds it, re-reads the slots (an equip that released the lock
 #   has written them by then), then deletes the Item.
 # The lock expires only to free an Item whose holder crashed before
-# releasing it.
+# releasing it. Its date is the holder's token: a holder that stalled past
+# the expiry can neither release nor delete under the next holder's lock.
 ITEM_LOCK_TTL = datetime.timedelta(seconds=30)
 
 
-def lock_item(itemuuid) -> bool:
-    """ Locks the Item; False when it is gone or already locked. """
+def lock_item(itemuuid):
+    """
+    Locks the Item. Returns the lock token (its date), or None when the Item
+    is gone or already locked.
+    """
     now = utcnow()
-    free = Q(locked=None) | Q(locked__lt=now - ITEM_LOCK_TTL)
-    return ItemDocument.objects(Q(_id=itemuuid) & free).update_one(set__locked=now) == 1
+    # Mongo keeps dates to the millisecond: the token must match what it stores
+    token = now.replace(microsecond=now.microsecond // 1000 * 1000)
+    free = Q(locked=None) | Q(locked__lt=token - ITEM_LOCK_TTL)
+    if ItemDocument.objects(Q(_id=itemuuid) & free).update_one(set__locked=token) == 1:
+        return token
+    return None
 
 
-def unlock_item(itemuuid) -> None:
-    """ Releases the Item lock. A deleted Item has nothing to release. """
-    ItemDocument.objects(_id=itemuuid).update_one(unset__locked=True)
+def unlock_item(itemuuid, token) -> None:
+    """ Releases the Item lock, if this token still holds it. """
+    ItemDocument.objects(_id=itemuuid, locked=token).update_one(unset__locked=True)
+
+
+def delete_locked_item(itemuuid, token) -> bool:
+    """ Deletes the Item, if this token still holds it. True when deleted. """
+    return ItemDocument.objects(_id=itemuuid, locked=token).delete() == 1

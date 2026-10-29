@@ -7,7 +7,6 @@ from loguru import logger
 
 from mongo.models.Creature import CreatureDocument, CreatureSlots
 from mongo.models.Highscore import HighscoreDocument
-from mongo.models.Item import ItemDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
 from mongo.utils import utcnow
@@ -18,7 +17,7 @@ from routes.mypc.action.profession._tools import (
     profession_gain,
     profession_scaled,
     )
-from utils.item_lock import lock_item, unlock_item
+from utils.item_lock import delete_locked_item, lock_item, unlock_item
 from utils.pa import instance_tick
 from utils.redis import consume_pa, get_pa
 from variables import rarity_array
@@ -58,7 +57,8 @@ def is_equipped(creature, item) -> bool:
 def recycling(creatureuuid, itemuuid):
     # Held until the Item is deleted: of two recyclings, or of an equip and a
     # recycling, of this Item, only one goes on (see utils/item_lock.py)
-    if not lock_item(g.Item.id):
+    token = lock_item(g.Item.id)
+    if token is None:
         msg = f'{g.h} ItemUUID({itemuuid}) busy or already recycled'
         logger.warning(msg)
         return jsonify(
@@ -74,7 +74,7 @@ def recycling(creatureuuid, itemuuid):
     # that the Item is locked: an equip that ended meanwhile is seen here
     Creature = CreatureDocument.objects(_id=g.Creature.id).get()
     if is_equipped(Creature, g.Item):
-        unlock_item(g.Item.id)
+        unlock_item(g.Item.id, token)
         msg = f'{g.h} ItemUUID({itemuuid}) is equipped'
         logger.warning(msg)
         return jsonify(
@@ -86,7 +86,7 @@ def recycling(creatureuuid, itemuuid):
         ), 200
 
     # Deleted before anything is credited, by the lock holder only
-    if ItemDocument.objects(_id=g.Item.id).delete() == 0:
+    if not delete_locked_item(g.Item.id, token):
         msg = f'{g.h} ItemUUID({itemuuid}) already recycled'
         logger.warning(msg)
         return jsonify(
