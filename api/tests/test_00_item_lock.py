@@ -80,6 +80,7 @@ def lock(mongo, monkeypatch):
     return types.SimpleNamespace(
         lock_item=module.lock_item,
         unlock_item=module.unlock_item,
+        delete_locked_item=module.delete_locked_item,
         ttl=module.ITEM_LOCK_TTL,
         item=item,
         locked=locked,
@@ -90,36 +91,46 @@ def lock(mongo, monkeypatch):
 def test_a_free_item_is_locked(lock):
     item = lock.item()
 
-    assert lock.lock_item(item.id) is True
-    assert lock.locked(item) is not None
+    token = lock.lock_item(item.id)
+
+    # The token is the lock date as Mongo stores it (to the millisecond)
+    assert token is not None
+    assert lock.locked(item) == token
 
 
 def test_a_locked_item_is_refused_to_the_second_caller(lock):
     # Two recyclings, or an equip and a recycling: only the first gets it
     item = lock.item()
 
-    assert lock.lock_item(item.id) is True
-    assert lock.lock_item(item.id) is False
+    assert lock.lock_item(item.id) is not None
+    assert lock.lock_item(item.id) is None
 
 
 def test_an_unlocked_item_can_be_locked_again(lock):
     # An equip releases it: the Item can be recycled later (or equipped again)
     item = lock.item()
-    lock.lock_item(item.id)
+    token = lock.lock_item(item.id)
 
-    lock.unlock_item(item.id)
+    lock.unlock_item(item.id, token)
 
     assert lock.locked(item) is None
-    assert lock.lock_item(item.id) is True
+    assert lock.lock_item(item.id) is not None
+
+
+def test_the_holder_deletes_the_item(lock):
+    item = lock.item()
+    token = lock.lock_item(item.id)
+
+    assert lock.delete_locked_item(item.id, token) is True
+    assert lock.model.objects(_id=item.id).count() == 0
 
 
 def test_a_deleted_item_cannot_be_locked(lock):
     # An equip that comes after a recycling deleted the Item is refused
     item = lock.item()
-    lock.lock_item(item.id)
-    lock.model.objects(_id=item.id).delete()
+    lock.delete_locked_item(item.id, lock.lock_item(item.id))
 
-    assert lock.lock_item(item.id) is False
+    assert lock.lock_item(item.id) is None
 
 
 def test_an_expired_lock_is_taken_over(lock):
@@ -127,7 +138,7 @@ def test_an_expired_lock_is_taken_over(lock):
     stale = datetime.datetime(2026, 1, 1)
     item = lock.item(locked=stale)
 
-    assert lock.lock_item(item.id) is True
+    assert lock.lock_item(item.id) is not None
     assert lock.locked(item) > stale
 
 
@@ -135,13 +146,28 @@ def test_a_lock_younger_than_its_ttl_is_kept(lock):
     from mongo.utils import utcnow
     item = lock.item(locked=utcnow() - lock.ttl / 2)
 
-    assert lock.lock_item(item.id) is False
+    assert lock.lock_item(item.id) is None
+
+
+def test_a_stalled_holder_cannot_act_under_the_next_lock(lock):
+    # A holder stalled past the expiry: the next holder took the lock over.
+    # The stalled one can neither delete the Item nor release that lock
+    stale = datetime.datetime(2026, 1, 1)
+    item = lock.item(locked=stale)
+    token = lock.lock_item(item.id)
+
+    assert lock.delete_locked_item(item.id, stale) is False
+    lock.unlock_item(item.id, stale)
+
+    assert lock.model.objects(_id=item.id).count() == 1
+    assert lock.locked(item) == token
 
 
 def test_unlocking_a_deleted_item_does_nothing(lock):
     item = lock.item()
-    lock.model.objects(_id=item.id).delete()
+    token = lock.lock_item(item.id)
+    lock.delete_locked_item(item.id, token)
 
-    lock.unlock_item(item.id)
+    lock.unlock_item(item.id, token)
 
     assert lock.model.objects(_id=item.id).count() == 0

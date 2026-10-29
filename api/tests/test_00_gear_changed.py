@@ -35,6 +35,7 @@ TOKEN = 'test-resolver-token'
 CREATURE_ID = uuid.uuid4()
 INSTANCE_ID = uuid.uuid4()
 ITEM_ID = uuid.uuid4()
+LOCK_TOKEN = 'lock-token'
 WEAPON_METAID = 1
 NO_MINS = {'min_m': 0, 'min_r': 0, 'min_g': 0, 'min_v': 0, 'min_p': 0, 'min_b': 0}
 META_INDEXED = {
@@ -224,8 +225,8 @@ def routes(monkeypatch, variables):
 
     # Always granted, recorded by the world fixture (the lock itself: test_00_item_lock.py)
     item_lock = types.ModuleType('utils.item_lock')
-    item_lock.lock_item = lambda itemuuid: True
-    item_lock.unlock_item = lambda itemuuid: None
+    item_lock.lock_item = lambda itemuuid: 'token'
+    item_lock.unlock_item = lambda itemuuid, token: None
     monkeypatch.setitem(sys.modules, 'utils.item_lock', item_lock)
 
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: _identity)
@@ -282,11 +283,12 @@ def world(routes, monkeypatch):
 
     def lock_item(itemuuid):
         events.append(('lock', itemuuid))
-        return lock.free
+        return LOCK_TOKEN if lock.free else None
 
     monkeypatch.setattr(routes.equip, 'lock_item', lock_item, raising=False)
     monkeypatch.setattr(
-        routes.equip, 'unlock_item', lambda itemuuid: events.append(('unlock', itemuuid)), raising=False,
+        routes.equip, 'unlock_item', lambda itemuuid, token: events.append(('unlock', itemuuid, token)),
+        raising=False,
         )
 
     app = Flask(__name__)
@@ -341,8 +343,9 @@ def test_equip_holds_the_item_lock_around_the_save(world):
     code, body = world.equip('weapon', 'righthand')
 
     assert body['success'] is True
-    assert world.events[:3] == [('lock', ITEM_ID), 'save', ('unlock', ITEM_ID)]
-    assert world.events.index(('unlock', ITEM_ID)) < world.events.index('consume_pa')
+    # Released with the token it got: never someone else's lock
+    assert world.events[:3] == [('lock', ITEM_ID), 'save', ('unlock', ITEM_ID, LOCK_TOKEN)]
+    assert world.events.index(('unlock', ITEM_ID, LOCK_TOKEN)) < world.events.index('consume_pa')
 
 
 def test_equip_of_a_locked_item_is_free(world):
@@ -365,7 +368,7 @@ def test_equip_releases_the_lock_when_the_save_fails(world):
     with pytest.raises(RuntimeError):
         world.equip('weapon', 'righthand')
 
-    assert world.events == [('lock', ITEM_ID), ('unlock', ITEM_ID)]
+    assert world.events == [('lock', ITEM_ID), ('unlock', ITEM_ID, LOCK_TOKEN)]
 
 
 def test_unequip_success_notifies_after_save(world):

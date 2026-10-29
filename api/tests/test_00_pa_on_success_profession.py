@@ -25,6 +25,7 @@ sys.path.append(LOCAL_PATH)
 PROFESSION_ROUTES = os.path.join(LOCAL_PATH, 'routes', 'mypc', 'action', 'profession')
 RARITIES = ['Broken', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
 TICK = 3600
+LOCK_TOKEN = 'lock-token'
 # Distinct scores, to tell which one the gathering yield reads
 GATHERING = 7
 SKINNING = 3
@@ -179,27 +180,22 @@ def world(monkeypatch):
         CreatureSlots=types.SimpleNamespace(_fields={name: None for name in SLOTS}),
         )
 
-    def item_delete():
-        if state.item_gone:
-            return 0
-        events.append(('item_delete',))
-        return 1
-
-    _module(
-        'mongo.models.Item', monkeypatch,
-        ItemDocument=types.SimpleNamespace(
-            objects=lambda _id=None: types.SimpleNamespace(delete=item_delete),
-            ),
-        )
-
     def lock_item(itemuuid):
         state.locks.append(('lock', itemuuid))
-        return state.item_lock_free
+        return LOCK_TOKEN if state.item_lock_free else None
+
+    def delete_locked_item(itemuuid, token):
+        # Gone, or its lock expired and was taken over: nothing deleted
+        if state.item_gone or token != LOCK_TOKEN:
+            return False
+        events.append(('item_delete',))
+        return True
 
     _module(
         'utils.item_lock', monkeypatch,
         lock_item=lock_item,
-        unlock_item=lambda itemuuid: state.locks.append(('unlock', itemuuid)),
+        unlock_item=lambda itemuuid, token: state.locks.append(('unlock', itemuuid, token)),
+        delete_locked_item=delete_locked_item,
         )
     _module(
         'mongo.models.Satchel', monkeypatch,
@@ -449,7 +445,7 @@ def test_recycling_equipped_item_is_free(world, slotname):
     _assert_refused_free(world, code, body)
     assert 'is equipped' in body['msg']
     # The lock taken to read the slots is released: the Item stays usable
-    assert world.state.locks == [('lock', item.id), ('unlock', item.id)]
+    assert world.state.locks == [('lock', item.id), ('unlock', item.id, LOCK_TOKEN)]
 
 
 def test_recycling_reads_the_slots_again_once_locked(world):

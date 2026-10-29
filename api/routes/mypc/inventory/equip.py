@@ -281,7 +281,8 @@ def equip(creatureuuid, type, slotname, itemuuid):
     else:
         # Held around the slot write: a recycling of this Item running at the
         # same time is refused, or this equip is (see utils/item_lock.py)
-        if not lock_item(g.Item.id):
+        token = lock_item(g.Item.id)
+        if token is None:
             msg = f'{g.h} Equip KO (Item busy or gone)'
             logger.warning(msg)
             return jsonify(
@@ -295,7 +296,7 @@ def equip(creatureuuid, type, slotname, itemuuid):
             g.Creature.updated = utcnow()
             g.Creature.save()
         finally:
-            unlock_item(g.Item.id)
+            unlock_item(g.Item.id, token)
 
     # Here everything should be OK with the equip
     # We consume the PA
