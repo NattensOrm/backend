@@ -684,7 +684,7 @@ def _load_api_variables(monkeypatch):
     use is the metas, stubbed empty; nothing is left in sys.modules.
     """
     meta = types.ModuleType('mongo.models.Meta')
-    for name in ('MetaArmor', 'MetaRace', 'MetaWeapon'):
+    for name in ('MetaArmor', 'MetaRace', 'MetaRecipe', 'MetaWeapon'):
         setattr(meta, name, types.SimpleNamespace(objects=lambda: []))
     monkeypatch.setitem(sys.modules, 'mongo.models.Meta', meta)
     monkeypatch.setenv('SEP_SECRET_KEY', 'unit-test-secret')
