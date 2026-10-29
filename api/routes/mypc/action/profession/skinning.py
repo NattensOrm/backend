@@ -92,6 +92,20 @@ def skinning(creatureuuid, resourceuuid):
             }
         ), 200
 
+    # x/y default to None on both documents: without a position there is no
+    # range to check, so it is a refusal (the distance below would raise)
+    positions = (Corpse.x, Corpse.y, g.Creature.x, g.Creature.y)
+    if any(position is None for position in positions):
+        msg = f'{g.h} CorpseUUID({resourceuuid}) range unknown (no position)'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
     if abs(Corpse.x - g.Creature.x) > 1 or abs(Corpse.y - g.Creature.y) > 1:
         msg = f'{g.h} CorpseUUID({resourceuuid}) not in range'
         logger.warning(msg)
