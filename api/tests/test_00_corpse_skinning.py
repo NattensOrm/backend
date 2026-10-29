@@ -26,6 +26,8 @@ sys.path.append(LOCAL_PATH)
 # mongomock, so the claim (queryset delete and its count) runs for real.
 REPO_PATH = os.path.join(LOCAL_PATH, os.pardir)
 CORPSE_MODEL = os.path.join(REPO_PATH, 'mongo', 'models', 'Corpse.py')
+MONGO_UTILS = os.path.join(REPO_PATH, 'mongo', 'utils.py')
+MOCK_ALIAS = 'test-corpse-skinning'
 SKINNING_ROUTE = os.path.join(LOCAL_PATH, 'routes', 'mypc', 'action', 'profession', 'skinning.py')
 
 INSTANCE_ID = uuid.uuid4()
@@ -68,13 +70,19 @@ def _creature(squad=None, rank=None, instance=INSTANCE_ID):
 
 @pytest.fixture
 def mongo():
-    """ In-memory Mongo for the mongoengine default alias, dropped after the test. """
+    """
+    In-memory Mongo on its own alias, dropped after the test: in CI the
+    default alias may already point at the real Mongo, registered by another
+    test importing the mongo package.
+    """
     mongoengine.connect(
-        'pytest', alias='default', mongo_client_class=mongomock.MongoClient,
+        'pytest', alias=MOCK_ALIAS, mongo_client_class=mongomock.MongoClient,
         uuidRepresentation='standard',
         )
     yield
-    mongoengine.disconnect(alias='default')
+    # mongomock keeps its data while any client lives: drop it explicitly
+    mongoengine.connection.get_connection(MOCK_ALIAS).drop_database('pytest')
+    mongoengine.disconnect(alias=MOCK_ALIAS)
 
 
 @pytest.fixture
@@ -89,7 +97,13 @@ def world(mongo, monkeypatch):
     events = []
     creatures = {}
 
+    # Corpse.py imports mongo.utils: give it the real file under a stub mongo
+    # package, so mongo/__init__.py (and its connect()) never runs
+    package = _module('mongo', monkeypatch)
+    package.__path__ = []
+    monkeypatch.setitem(sys.modules, 'mongo.utils', _load('mongo.utils', MONGO_UTILS))
     corpse_model = _load('test_corpse_skinning_model', CORPSE_MODEL)
+    corpse_model.CorpseDocument._meta['db_alias'] = MOCK_ALIAS
     monkeypatch.setitem(sys.modules, 'mongo.models.Corpse', corpse_model)
     _module(
         'mongo.models.Creature', monkeypatch,
