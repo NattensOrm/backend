@@ -12,6 +12,7 @@ from utils.decorators import (
     check_creature_exists,
     check_item_exists,
     )
+from utils.item_lock import lock_item, unlock_item
 from utils.pa import equip_cost, instance_tick, pa_shortfall_colour
 from utils.redis import r, get_pa, consume_pa
 from utils.resolver import notify_gear_changed
@@ -278,8 +279,23 @@ def equip(creatureuuid, type, slotname, itemuuid):
             }
         ), 200
     else:
-        g.Creature.updated = utcnow()
-        g.Creature.save()
+        # Held around the slot write: a recycling of this Item running at the
+        # same time is refused, or this equip is (see utils/item_lock.py)
+        if not lock_item(g.Item.id):
+            msg = f'{g.h} Equip KO (Item busy or gone)'
+            logger.warning(msg)
+            return jsonify(
+                {
+                    "success": False,
+                    "msg": msg,
+                    "payload": None,
+                }
+            ), 200
+        try:
+            g.Creature.updated = utcnow()
+            g.Creature.save()
+        finally:
+            unlock_item(g.Item.id)
 
     # Here everything should be OK with the equip
     # We consume the PA
