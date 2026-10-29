@@ -18,6 +18,8 @@ from flask import Flask
 LOCAL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(LOCAL_PATH)
 CORPSE_MODEL = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'models', 'Corpse.py')
+MONGO_UTILS = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'utils.py')
+MOCK_ALIAS = 'test-internal-remove'
 
 # Designer ruling Q99 (2026-10-10): a dead monster is removed from the map at
 # once. The fight resolver calls POST /internal/instance/<i>/creature/<c>/remove,
@@ -107,21 +109,35 @@ def modules(monkeypatch):
 
 
 @pytest.fixture
-def corpse_model():
+def corpse_model(monkeypatch):
     """
     The real Corpse model, loaded straight from its file (the mongo package
-    connects at import) on an in-memory mongomock for the default alias, so
-    its save() and queryset delete() run for real. Dropped after the test.
+    connects at import) on an in-memory mongomock, so its save() and queryset
+    delete() run for real. Dropped after the test.
+    Its 'from mongo.utils import utcnow' gets mongo/utils.py under a stub
+    mongo package, so mongo/__init__.py (and its connect()) never runs.
+    The mock has its own alias: in CI the default one may already point at
+    the real Mongo, registered by another test importing the mongo package.
     """
+    package = types.ModuleType('mongo')
+    package.__path__ = []
+    monkeypatch.setitem(sys.modules, 'mongo', package)
+    utils_spec = importlib.util.spec_from_file_location('mongo.utils', MONGO_UTILS)
+    utils = importlib.util.module_from_spec(utils_spec)
+    utils_spec.loader.exec_module(utils)
+    monkeypatch.setitem(sys.modules, 'mongo.utils', utils)
     spec = importlib.util.spec_from_file_location('test_internal_remove_corpse', CORPSE_MODEL)
     model = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(model)
+    model.CorpseDocument._meta['db_alias'] = MOCK_ALIAS
     mongoengine.connect(
-        'pytest', alias='default', mongo_client_class=mongomock.MongoClient,
+        'pytest', alias=MOCK_ALIAS, mongo_client_class=mongomock.MongoClient,
         uuidRepresentation='standard',
         )
     yield model
-    mongoengine.disconnect(alias='default')
+    # mongomock keeps its data while any client lives: drop it explicitly
+    mongoengine.connection.get_connection(MOCK_ALIAS).drop_database('pytest')
+    mongoengine.disconnect(alias=MOCK_ALIAS)
 
 
 class _Collection:
