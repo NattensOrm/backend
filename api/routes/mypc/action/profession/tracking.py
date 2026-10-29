@@ -11,7 +11,7 @@ from mongo.utils import utcnow
 
 from routes._decorators import belongs, exists
 from utils.pa import instance_tick
-from utils.redis import r, get_pa
+from utils.redis import r, consume_pa, get_pa
 
 from variables import env_vars
 
@@ -33,7 +33,8 @@ PROFESSION_NAME = 'tracking'
 # Custom decorators
 @exists.creature
 @belongs.creature_in_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the Effect is applied (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 def tracking(creatureuuid):
     """ Applies a temporary tracking Effect to a Creature. """
 
@@ -65,6 +66,15 @@ def tracking(creatureuuid):
                 "payload": None,
             }
         ), 200
+
+    # A refusal is free, PA are spent once the action is done (Lordslair +
+    # chifret 2026-10-29): here once the Effect is set, a Redis error is free
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
 
     # We set the HighScores
     highscores_update_query = {

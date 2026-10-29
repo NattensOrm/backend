@@ -19,7 +19,7 @@ from routes.mypc.action.profession._tools import (
     profession_scaled,
     )
 from utils.pa import instance_tick
-from utils.redis import get_pa
+from utils.redis import consume_pa, get_pa
 from variables import rarity_array
 
 #
@@ -38,7 +38,8 @@ PROFESSION_NAME = 'gathering'
 # Custom decorators
 @exists.creature
 @belongs.creature_in_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the gathering is validated (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 def gathering(creatureuuid, resourceuuid):
     # Check if the resource exists
     if ResourceDocument.objects(_id=resourceuuid):
@@ -53,6 +54,15 @@ def gathering(creatureuuid, resourceuuid):
                 "payload": None,
             }
         ), 200
+
+    # A refusal is free, PA are spent once the action is validated, even if it
+    # then fails (Lordslair + chifret 2026-10-29)
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
 
     Profession = ProfessionDocument.objects(_id=creatureuuid).get()
 
