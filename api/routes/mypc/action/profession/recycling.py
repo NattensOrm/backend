@@ -5,6 +5,7 @@ from flask import g, jsonify
 from flask_jwt_extended import jwt_required
 from loguru import logger
 
+from mongo.models.Creature import CreatureSlots
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
@@ -28,6 +29,18 @@ PA_COST_BLUE = 2
 PROFESSION_NAME = 'recycling'
 
 
+def is_equipped(creature, item) -> bool:
+    """ True when the Item sits in one of the Creature's slots. """
+    slots = creature.slots
+    if slots is None:
+        return False
+    for slotname in CreatureSlots._fields:
+        slot = getattr(slots, slotname, None)
+        if slot is not None and slot.id is not None and str(slot.id) == str(item.id):
+            return True
+    return False
+
+
 #
 # Routes /mypc/<uuid:creatureuuid>/action
 #
@@ -41,6 +54,19 @@ PROFESSION_NAME = 'recycling'
 @exists.item
 @belongs.item_to_creature
 def recycling(creatureuuid, itemuuid):
+    # An equipped Item must be unequipped first: recycling deletes it, which
+    # would leave its slot pointing at nothing
+    if is_equipped(g.Creature, g.Item):
+        msg = f'{g.h} ItemUUID({itemuuid}) is equipped'
+        logger.warning(msg)
+        return jsonify(
+            {
+                "success": False,
+                "msg": msg,
+                "payload": None,
+            }
+        ), 200
+
     # A refusal is free, PA are spent once the action is validated, even if it
     # then fails (Lordslair + chifret 2026-10-29)
     consume_pa(
