@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import json
 import uuid
 
 from flask import g, jsonify, request
@@ -29,7 +28,7 @@ from utils.decorators import (
     )
 from utils.discord import discord_scopes
 from utils.redis import cput, qput
-from variables import metaIndexed, rarity_array, YQ_DISCORD
+from variables import metaIndexed, PS_AI_CREATURE, rarity_array, YQ_DISCORD
 
 
 class AddInstanceSchema(BaseModel):
@@ -184,15 +183,14 @@ def add(creatureuuid):
             else:
                 # We send in pubsub channel for IA to spawn the Mobs
                 try:
-                    # Broadcast Channel
-                    cput('ai-creature',
-                         json.dumps({
-                            "action": 'pop',
-                            "instance": newInstance.to_json(json_options=JSON_OPTIONS),
-                            "creature": newMonster.to_json(json_options=JSON_OPTIONS),
-                            }))
+                    # AI Channel (cput serialises the dict itself)
+                    cput(PS_AI_CREATURE, {
+                        "action": 'pop',
+                        "instance": newInstance.to_json(json_options=JSON_OPTIONS),
+                        "creature": newMonster.to_json(json_options=JSON_OPTIONS),
+                        })
                 except Exception as e:
-                    msg = f'{g.h} Publish(ai-creature/pop) KO [{e}]'
+                    msg = f'{g.h} Publish({PS_AI_CREATURE}/pop) KO [{e}]'
                     logger.error(msg)
 
             mobs_nbr += 1
