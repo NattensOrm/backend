@@ -20,7 +20,7 @@ from routes.mypc.action.profession._tools import (
     profession_scaled,
     )
 from utils.pa import instance_tick
-from utils.redis import get_pa
+from utils.redis import consume_pa, get_pa
 from variables import rarity_array
 
 #
@@ -74,7 +74,8 @@ def can_skin(skinner, corpse) -> bool:
 # Custom decorators
 @exists.creature
 @belongs.creature_in_instance
-@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=True)
+# Only checked here: the PA are consumed once the Corpse is claimed (see below)
+@exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
 def skinning(creatureuuid, resourceuuid):
 
     # Check if the corpse exists
@@ -137,6 +138,15 @@ def skinning(creatureuuid, resourceuuid):
             }
         ), 200
     logger.trace(f'{g.h} Corpse claim OK')
+
+    # A refusal is free, PA are only spent on a done action (Lordslair
+    # 2026-10-29): consumed here, by the skinner who claimed the Corpse
+    consume_pa(
+        creatureuuid=g.Creature.id,
+        redpa=PA_COST_RED,
+        bluepa=PA_COST_BLUE,
+        tick=instance_tick(g.Creature),
+        )
 
     Profession = ProfessionDocument.objects(_id=creatureuuid).get()
 

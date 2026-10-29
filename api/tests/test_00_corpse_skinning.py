@@ -121,12 +121,15 @@ def world(mongo, monkeypatch):
                 ),
             ),
         )
+    pa_check = {}
+
+    def pa(red=0, blue=0, consume=False):
+        pa_check.update(red=red, blue=blue, consume=consume)
+        return _identity
+
     _module(
         'routes._decorators', monkeypatch,
-        exists=types.SimpleNamespace(
-            creature=_identity,
-            pa=lambda red=0, blue=0, consume=False: _identity,
-            ),
+        exists=types.SimpleNamespace(creature=_identity, pa=pa),
         belongs=types.SimpleNamespace(creature_in_instance=_identity),
         )
     _module(
@@ -136,7 +139,12 @@ def world(mongo, monkeypatch):
         profession_scaled=lambda score: 0,
         )
     _module('utils.pa', monkeypatch, instance_tick=lambda creature: 3600)
-    _module('utils.redis', monkeypatch, get_pa=lambda **kwargs: {'pa': 'stub'})
+    _module(
+        'utils.redis', monkeypatch,
+        consume_pa=lambda creatureuuid, redpa=0, bluepa=0, *, tick: events.append(
+            ('pa', creatureuuid, redpa, bluepa, tick)),
+        get_pa=lambda **kwargs: {'pa': 'stub'},
+        )
     _module('variables', monkeypatch, rarity_array={'creature': RARITIES})
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: _identity)
 
@@ -168,6 +176,7 @@ def world(mongo, monkeypatch):
 
     return types.SimpleNamespace(
         route=route, corpse=corpse, add=add, skin=skin, exists=exists, events=events,
+        pa_check=pa_check,
         )
 
 
@@ -175,7 +184,9 @@ def _assert_skinned(world, skinner, corpse, code, body):
     assert code == 200
     assert body['success'] is True
     assert not world.exists(corpse)
+    # Exactly 2 blue PA, once, after the claim and before any credit
     assert world.events == [
+        ('pa', skinner.id, 0, 2, 3600),
         ('profession', skinner.id),
         ('highscore', skinner.id),
         ('satchel', skinner.id),
@@ -188,12 +199,28 @@ def _assert_refused(world, corpse, code, body, reason):
     assert body['payload'] is None
     assert reason in body['msg']
     assert world.exists(corpse)
+    # A refusal is free: no PA consumed, nothing credited
     assert world.events == []
 
 
 #
 # The route
 #
+def test_decorator_checks_pa_without_consuming(world):
+    # Lordslair 2026-10-29: PA are only consumed when the action is done
+    assert world.pa_check == {'red': 0, 'blue': 2, 'consume': False}
+
+
+def test_out_of_range_is_refused(world):
+    killer = world.add(_creature())
+    killer.x = 5
+    corpse = world.corpse(killer)
+
+    code, body = world.skin(killer, corpse)
+
+    _assert_refused(world, corpse, code, body, 'not in range')
+
+
 def test_killer_skins(world):
     killer = world.add(_creature(squad=SQUAD_ID, rank='Member'))
     corpse = world.corpse(killer)
@@ -291,7 +318,23 @@ def test_concurrent_skinning_pays_once(world, monkeypatch):
     assert code == 200
     assert body['success'] is False
     assert 'already skinned' in body['msg']
+    # The loser of the claim pays nothing, PA included
     assert world.events == []
+
+
+def test_only_the_claim_winner_pays(world):
+    killer = world.add(_creature(squad=SQUAD_ID, rank='Leader'))
+    member = _creature(squad=SQUAD_ID, rank='Member')
+    corpse = world.corpse(killer)
+
+    first = world.skin(killer, corpse)
+    second = world.skin(member, corpse)
+
+    assert first[1]['success'] is True
+    assert second[1]['success'] is False
+    assert [event for event in world.events if event[0] == 'pa'] == [
+        ('pa', killer.id, 0, 2, 3600),
+        ]
 
 
 def test_skinned_corpse_is_gone(world):
