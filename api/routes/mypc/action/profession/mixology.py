@@ -39,7 +39,7 @@ RACE_CURRENCY = {
     3: 'banana',
     4: 'banana',
     }
-# One consumable per craft, two at mastery (the score where profession_gain stops)
+# One consumable per craft, two at mastery (the top profession_scaled step)
 PROFESSION_MASTERY = 100
 
 

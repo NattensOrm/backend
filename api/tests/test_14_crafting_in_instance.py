@@ -38,11 +38,13 @@ def test_singouins_crafting_refused_in_instance(jwt_header, myitems):
     assert response.json().get("success") is False
     assert REFUSAL_MSG in response.json().get("msg")
 
-    # Mixology is not refused by the crafting gate
-    # (it fails for lack of bananas, we only assert on the gate)
+    # Mixology is not refused by the crafting gate: it goes on to the PA and
+    # recipe checks, and fails there (PJTest has no banana)
     response = requests.post(f"{API_URL}/mypc/{CREATURE_ID}/action/profession/mixology/2", headers=jwt_header['access'])  # noqa: E501
     assert response.status_code == 200
+    assert response.json().get("success") is False
     assert REFUSAL_MSG not in response.json().get("msg")
+    assert 'Not enough' in response.json().get("msg")
 
     # Catalyze is refused
     response = requests.put(f"{API_URL}/mypc/{CREATURE_ID}/action/item/catalyze/{item['_id']}", headers=jwt_header['access'])  # noqa: E501
