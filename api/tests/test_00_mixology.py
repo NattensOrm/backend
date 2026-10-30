@@ -729,8 +729,9 @@ def test_mixology_internal_counters_follow_the_recipe_meta(no_gain, monkeypatch)
     assert internal['currency'] == {'spent': 14}
 
 
-def test_mixology_refusal_counts_nothing(world):
-    world.setup(banana=24, broken=1)
+@pytest.mark.parametrize('banana, broken', [(24, 1), (25, 0)])
+def test_mixology_refusal_counts_nothing(world, banana, broken):
+    world.setup(banana=banana, broken=broken)
 
     code, body = world.craft(2)
 
@@ -757,22 +758,58 @@ def test_highscore_internal_reads_missing_counters_as_zeros(world):
     assert internal.currency.spent == 0
 
 
+# The deploy migration: drops the legacy flat keys only, so the per-rarity
+# counters written between the deploy and the migration are kept
+LEGACY_SHARD_KEYS = ['bought', 'obtained', 'recycled', 'sold']
+MIGRATION_FILTER = {'internal.shard.bought': {'$exists': True}}
+MIGRATION_UPDATE = {'$unset': {f'internal.shard.{key}': '' for key in LEGACY_SHARD_KEYS}}
+
+
 def test_highscore_flat_internal_shard_needs_the_migration(world):
     # The old flat internal.shard {bought, obtained, recycled, sold} does not
-    # load any more; unsetting it (the deploy migration) reads zeros again
+    # load any more. Recycling may already have added a per-rarity counter
+    # next to it before the migration runs
     world.setup(banana=25, broken=1)
     highscores = world.modules.models['Highscore'].HighscoreDocument
     collection = highscores._get_collection()
-    flat = {'bought': 0, 'obtained': 3, 'recycled': 0, 'sold': 0}
-    collection.update_one({'_id': str(CREATURE_ID)}, {'$set': {'internal': {'shard': flat}}})
+    mixed = {'bought': 0, 'obtained': 3, 'recycled': 0, 'sold': 0, 'rare': {'obtained': 2}}
+    collection.update_one({'_id': str(CREATURE_ID)}, {'$set': {'internal': {'shard': mixed}}})
 
     with pytest.raises(mongoengine.errors.FieldDoesNotExist):
         highscores.objects(_id=CREATURE_ID).get()
 
-    collection.update_many(
-        {'internal.shard.bought': {'$exists': True}}, {'$unset': {'internal.shard': ''}},
+    collection.update_many(MIGRATION_FILTER, MIGRATION_UPDATE)
+
+    assert collection.find_one({'_id': str(CREATURE_ID)})['internal']['shard'] == {
+        'rare': {'obtained': 2},
+        }
+    shard = highscores.objects(_id=CREATURE_ID).get().internal.shard
+    assert shard.rare.obtained == 2
+    assert shard.broken.obtained == 0
+    # Run again: nothing left to match, nothing changed
+    assert collection.update_many(MIGRATION_FILTER, MIGRATION_UPDATE).matched_count == 0
+
+
+def test_highscore_without_the_new_counters_saves_without_writing_them(world):
+    # The discord bot loads a Highscore, bumps a counter and save()s it: on a
+    # document that predates the new counters, their defaults are not written
+    world.setup(banana=25, broken=1)
+    highscores = world.modules.models['Highscore'].HighscoreDocument
+    collection = highscores._get_collection()
+    generic = {'bought': 0, 'obtained': 0, 'recycled': 0, 'sold': 0}
+    internal = {name: dict(generic) for name in ['fur', 'item', 'leather', 'meat', 'ore', 'skin']}
+    collection.update_one(
+        {'_id': str(CREATURE_ID)},
+        {'$set': {'internal': internal, 'general': {'death': 0, 'kill': 0}}},
         )
-    assert highscores.objects(_id=CREATURE_ID).get().internal.shard.broken.obtained == 0
+
+    highscore = highscores.objects(_id=CREATURE_ID).get()
+    highscore.internal.item.sold += 1
+    highscore.save()
+
+    stored = collection.find_one({'_id': str(CREATURE_ID)})['internal']
+    assert stored['item']['sold'] == 1
+    assert set(stored) == set(internal)
 
 
 def test_highscore_internal_reads_the_counters_mixology_wrote(no_gain, monkeypatch):
