@@ -1,9 +1,10 @@
 # -*- coding: utf8 -*-
 
 
-from flask import g, jsonify
+from flask import g, jsonify, request
 from flask_jwt_extended import jwt_required
 from loguru import logger
+from pydantic import BaseModel, ConfigDict, ValidationError
 from random import randrange
 
 from mongo.constants import RARITY
@@ -47,12 +48,19 @@ YIELD_SCORE_MAX = 100
 YIELD_RANK_MAX = 5
 
 
-def recipe_for(metaid):
-    """Return the recipe meta producing the consumables meta, or None."""
-    for recipe in metaIndexed['recipe'].values():
-        if metaid in recipe.get('product', {}).get('consumable', []):
-            return recipe
-    return None
+class MixologySchema(BaseModel):
+    """
+    The crafter's choices, Lordslair 2026-10-30 (Discord #engine-api msgs
+    1565771540983718041, 1565773539817295984): the recipe meta, the
+    consumables meta it should produce and the rarity of the shard to burn.
+    Never a quantity: the costs come from the recipe meta only. Strict: no
+    coercion ("1", true, 1.0 are refused) and no other field.
+    """
+    model_config = ConfigDict(strict=True, extra='forbid')
+
+    recipe: int
+    product: int
+    shard: str
 
 
 def mixology_shard_rank(rarity):
@@ -132,27 +140,46 @@ def refused(msg, code, payload=None):
 #
 # Routes /mypc/<uuid:creatureuuid>/action
 #
-# API: POST /mypc/<uuid:creatureuuid>/action/profession/mixology/<int:metaid>/<string:rarity>
+# API: POST /mypc/<uuid:creatureuuid>/action/profession/mixology
+# Body: {"recipe": <recipe metaid>, "product": <consumables metaid>, "shard": <rarity>}
 @jwt_required()
 # Custom decorators
 @exists.creature
 # Only checked here: the PA are consumed once the resources are spent (see below)
 @exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
-def mixology(creatureuuid, metaid, rarity):
-    # Path parameter checks: before any write
-    kind = CONSUMABLE_FIELDS.get(metaid)
+def mixology(creatureuuid):
+    # Body checks: before any write. A missing or malformed JSON body is None,
+    # refused by the schema like any other invalid body
+    try:
+        choice = MixologySchema.model_validate(request.get_json(silent=True))
+    except ValidationError as e:
+        return refused(
+            f'{g.h} Mixology KO (body: validation and parsing error)',
+            400,
+            e.errors(include_url=False, include_context=False),
+            )
+
+    recipe = metaIndexed['recipe'].get(choice.recipe)
+    if recipe is None:
+        return refused(f'{g.h} Mixology KO (recipe:{choice.recipe} unknown)', 400)
+
+    product = choice.product
+    if product not in recipe.get('product', {}).get('consumable', []):
+        return refused(
+            f'{g.h} Mixology KO (consumable:{product} not a product of recipe:{choice.recipe})',
+            400,
+            )
+
+    kind = CONSUMABLE_FIELDS.get(product)
     if kind is None:
-        return refused(f'{g.h} Mixology KO (consumable:{metaid} is never crafted)', 400)
+        return refused(f'{g.h} Mixology KO (consumable:{product} is never crafted)', 400)
 
     # The shard burned, Satchel.shard.<rarity>: no default rarity
+    rarity = choice.shard
     shard_rank = mixology_shard_rank(rarity)
     if shard_rank is None:
-        # Echoed escaped and cut: it is the raw path segment
+        # Echoed escaped and cut: it is the raw client value
         return refused(f'{g.h} Mixology KO (shard rarity:{rarity[:16]!r} unknown)', 400)
-
-    recipe = recipe_for(metaid)
-    if recipe is None:
-        return refused(f'{g.h} Mixology KO (consumable:{metaid} has no recipe)', 400)
 
     currency = RACE_CURRENCY.get(g.Creature.race)
     if currency is None:
@@ -227,7 +254,7 @@ def mixology(creatureuuid, metaid, rarity):
                 "pa": get_pa(creatureuuid=g.Creature.id, tick=instance_tick(g.Creature)),
                 "consumable": {
                     "count": count,
-                    "metaid": metaid,
+                    "metaid": product,
                     },
                 "satchel": Satchel.to_mongo(),
             }

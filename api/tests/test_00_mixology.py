@@ -28,6 +28,9 @@ sys.path.append(LOCAL_PATH)
 # highscore like the other professions. Meta 2 goes to
 # Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is
 # never crafted (design ruling Q78).
+# Lordslair 2026-10-30 (Discord #engine-api msgs 1565771540983718041,
+# 1565773539817295984): the client posts its choices as a JSON body
+# {recipe, product, shard}, never a quantity; anything else is a 400.
 # Unit test: Satchel/Profession/Highscore are real documents on an in-memory
 # mongomock, so the conditional update and the $inc run for real. The PA are
 # a dict standing for the Redis pools, with the exists.pa / consume_pa rules.
@@ -209,17 +212,19 @@ def world(modules):
             'highscore': highscores.find_one({'_id': str(CREATURE_ID)}),
             }
 
-    def craft(metaid, rarity='broken'):
-        with app.test_request_context():
+    def post(**request):
+        """ Calls the route with that request (json=..., or data=... and content_type=...). """
+        with app.test_request_context(method='POST', **request):
             g.h = f'[Creature.id:{CREATURE_ID}]'
             g.Creature = creature
-            response, code = modules.route.mixology(
-                creatureuuid=CREATURE_ID, metaid=metaid, rarity=rarity,
-                )
+            response, code = modules.route.mixology(creatureuuid=CREATURE_ID)
             return code, response.get_json()
 
+    def craft(metaid, rarity='broken', recipe=1):
+        return post(json={'recipe': recipe, 'product': metaid, 'shard': rarity})
+
     return types.SimpleNamespace(
-        craft=craft, setup=setup, stored=stored, creature=creature,
+        post=post, craft=craft, setup=setup, stored=stored, creature=creature,
         professions=professions, modules=modules, pools=modules.pools,
         )
 
@@ -296,10 +301,94 @@ def test_mixology_in_an_instance_without_the_resources_spends_no_pa(world):
 
 
 #
-# Path parameter
+# Body: {"recipe", "product", "shard"}, strictly validated before any write
 #
+VALID_BODY = {'recipe': 1, 'product': 2, 'shard': 'broken'}
+
+
+@pytest.mark.parametrize('body', [
+    # A missing field
+    {'product': 2, 'shard': 'broken'},
+    {'recipe': 1, 'shard': 'broken'},
+    {'recipe': 1, 'product': 2},
+    {},
+    # Another field: the client never sends a quantity
+    {**VALID_BODY, 'count': 5},
+    {**VALID_BODY, 'currency': 0},
+    # A wrong type: no coercion
+    {**VALID_BODY, 'recipe': '1'},
+    {**VALID_BODY, 'recipe': True},
+    {**VALID_BODY, 'recipe': 1.0},
+    {**VALID_BODY, 'recipe': None},
+    {**VALID_BODY, 'product': '2'},
+    {**VALID_BODY, 'product': [2]},
+    {**VALID_BODY, 'shard': 0},
+    {**VALID_BODY, 'shard': None},
+    {**VALID_BODY, 'shard': ['broken']},
+    # Not an object
+    [VALID_BODY],
+    'broken',
+    None,
+    ])
+def test_mixology_of_an_invalid_body_is_400_and_writes_nothing(world, body):
+    world.setup(banana=100, broken=5)
+    world.creature.instance = uuid.uuid4()
+    world.pools.update(red=10, blue=10)
+    before = world.stored()
+
+    code, response = world.post(json=body)
+
+    assert code == 400
+    assert response['success'] is False
+    assert isinstance(response['payload'], list)
+    assert world.stored() == before
+    assert world.pools == {'red': 10, 'blue': 10}
+
+
+@pytest.mark.parametrize('request_args', [
+    {},
+    {
+        'data': 'recipe=1&product=2&shard=broken',
+        'content_type': 'application/x-www-form-urlencoded',
+        },
+    {'data': '{"recipe": 1,', 'content_type': 'application/json'},
+    ])
+def test_mixology_without_a_json_body_is_400_and_writes_nothing(world, request_args):
+    world.setup(banana=100, broken=5)
+    before = world.stored()
+
+    code, response = world.post(**request_args)
+
+    assert code == 400
+    assert response['success'] is False
+    assert world.stored() == before
+
+
+def test_mixology_of_a_valid_body_succeeds(no_gain):
+    no_gain.setup(banana=25, broken=1)
+
+    code, response = no_gain.post(json=VALID_BODY)
+
+    assert code == 200
+    assert response['success'] is True
+
+
+@pytest.mark.parametrize('recipe', [0, 2, 999, -1])
+def test_mixology_of_an_unknown_recipe_is_400_and_writes_nothing(world, recipe):
+    world.setup(banana=100, broken=5)
+    before = world.stored()
+
+    code, body = world.craft(2, recipe=recipe)
+
+    assert code == 400
+    assert body['success'] is False
+    assert body['payload'] is None
+    assert f'recipe:{recipe} unknown' in body['msg']
+    assert world.stored() == before
+
+
 @pytest.mark.parametrize('metaid', [1, 0, 4, 999])
-def test_mixology_of_meta_1_or_unknown_is_400_and_writes_nothing(world, metaid):
+def test_mixology_of_a_product_not_in_the_recipe_is_400_and_writes_nothing(world, metaid):
     # Meta 1 is plain currency, never crafted; the others do not exist
     world.setup(banana=100, broken=5)
     before = world.stored()
@@ -309,6 +398,37 @@ def test_mixology_of_meta_1_or_unknown_is_400_and_writes_nothing(world, metaid):
     assert code == 400
     assert body['success'] is False
     assert body['payload'] is None
+    assert 'not a product of recipe:1' in body['msg']
+    assert world.stored() == before
+
+
+def test_mixology_of_a_recipe_listing_a_product_without_satchel_field_is_400(world):
+    # A recipe meta listing meta 1 still never crafts it: no Satchel field
+    recipes = world.modules.variables.metaIndexed['recipe']
+    recipes[1] = copy.deepcopy(recipes[1])
+    recipes[1]['product'] = {'consumable': [1, 2, 3]}
+    world.setup(banana=100, broken=5)
+    before = world.stored()
+
+    code, body = world.craft(1)
+
+    assert code == 400
+    assert body['success'] is False
+    assert 'never crafted' in body['msg']
+    assert world.stored() == before
+
+
+def test_mixology_of_a_recipe_without_product_is_400(world):
+    recipes = world.modules.variables.metaIndexed['recipe']
+    recipes[1] = copy.deepcopy(recipes[1])
+    del recipes[1]['product']
+    world.setup(banana=100, broken=5)
+    before = world.stored()
+
+    code, body = world.craft(2)
+
+    assert code == 400
+    assert body['success'] is False
     assert world.stored() == before
 
 
@@ -350,7 +470,7 @@ def test_mixology_reads_the_recipe_cost_from_the_metas(no_gain):
     assert satchel['shard']['broken'] == 2
 
 
-def test_mixology_of_a_meta_no_recipe_produces_is_400(world):
+def test_mixology_reads_the_recipe_products_from_the_metas(world):
     # The recipe -> consumables link is in the metas too
     recipes = world.modules.variables.metaIndexed['recipe']
     recipes[1] = copy.deepcopy(recipes[1])
