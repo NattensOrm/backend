@@ -24,7 +24,7 @@ sys.path.append(LOCAL_PATH)
 # Lordslair 2026-10-29 (Discord #engine-ai): crafting the heals is the
 # mixology profession. In town without PA, in an Instance for 0 red / 4 blue
 # PA spent once the resources are. The recipe is read from the metas, one
-# yield of 1 to 5 by score and trinket (formula B), profession points and
+# yield of 1 to 5 by score and shard (formula B), profession points and
 # highscore like the other professions. Meta 2 goes to
 # Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is
 # never crafted (design ruling Q78).
@@ -401,7 +401,7 @@ def test_mixology_by_a_race_without_currency_is_a_free_refusal(world):
 HISTOGRAM_ROW = re.compile(
     r'#\s+(\d+)\s+\| \[[█.]{20}\] (\d)\.(\d) -> (\d)(?: or (\d) \((\d+)% / (\d+)%\))?$'
     )
-HISTOGRAM_RANK = re.compile(r'# Trinket \w+ \(rank (\d)\)')
+HISTOGRAM_RANK = re.compile(r'# Shard \w+ \(rank (\d)\)')
 
 
 def _histogram():
@@ -478,11 +478,11 @@ def test_mixology_score_counts_between_0_and_100(modules, score, value):
 
 
 #
-# Trinket: the shard burned, its rarity chosen by the crafter
+# Shard rank: the shard burned, its rarity chosen by the crafter
 #
 @pytest.mark.parametrize('rank, rarity', list(enumerate(SHARDS)))
-def test_mixology_trinket_rank_is_the_shard_rarity_index(modules, rank, rarity):
-    assert modules.route.mixology_trinket_rank(rarity) == rank
+def test_mixology_shard_rank_is_the_shard_rarity_index(modules, rank, rarity):
+    assert modules.route.mixology_shard_rank(rarity) == rank
 
 
 @pytest.mark.parametrize('rank, rarity', list(enumerate(SHARDS)))
