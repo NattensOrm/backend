@@ -25,7 +25,8 @@ sys.path.append(LOCAL_PATH)
 # PA spent once the resources are. The recipe is read from the metas, one
 # consumable per craft (two at mastery), profession points and
 # highscore like the other professions. Meta 2 goes to
-# Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is never crafted (design ruling Q78).
+# Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is
+# never crafted (design ruling Q78).
 # Unit test: Satchel/Profession/Highscore are real documents on an in-memory
 # mongomock, so the conditional update and the $inc run for real. The PA are
 # a dict standing for the Redis pools, with the exists.pa / consume_pa rules.
@@ -77,7 +78,8 @@ def _pa_check(pools):
                 if _instance_tick(g.Creature) is not None:
                     shortfall = max(blue - pools['blue'], 0)
                     if pools['red'] < red + shortfall:
-                        return jsonify({"success": False, "msg": "Not enough PA", "payload": dict(pools)}), 200
+                        refusal = {"success": False, "msg": "No PA", "payload": dict(pools)}
+                        return jsonify(refusal), 200
                 return view(*args, **kwargs)
             return wrapper
         return decorator
@@ -124,7 +126,8 @@ def modules(mongo, monkeypatch):
         monkeypatch.setitem(sys.modules, f'mongo.models.{name}', model)
         models[name] = model
 
-    monkeypatch.setitem(sys.modules, 'routes.mypc.action.profession._tools', _load('test_mixology_tools', TOOLS))
+    tools = _load('test_mixology_tools', TOOLS)
+    monkeypatch.setitem(sys.modules, 'routes.mypc.action.profession._tools', tools)
 
     decorators = types.ModuleType('routes._decorators')
     pools = {'red': 0, 'blue': 0}
