@@ -121,7 +121,7 @@ def recycling(creatureuuid, itemuuid):
     highscores_update_query = {
         f'inc__profession__{PROFESSION_NAME}': 1,
         'inc__internal__item__recycled': 1,
-        'inc__internal__shard__obtained': shards_qty,
+        f'inc__internal__shard__{g.Item.rarity.lower()}__obtained': shards_qty,
         "set__updated": utcnow(),
         }
     HighscoreDocument.objects(_id=g.Creature.id).update_one(**highscores_update_query)

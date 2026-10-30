@@ -233,10 +233,16 @@ def mixology(creatureuuid):
         tick=instance_tick(g.Creature),
         )
 
-    # We set the HighScores
+    # We set the HighScores. Internal ones (not shown to players), Lordslair
+    # 2026-10-30 (#engine-api msgs 1565777282864259093, 1565778121179791363):
+    # the shards used and the currency spent are the recipe's amounts, the
+    # consumables created are the yield
     HighscoreDocument.objects(_id=g.Creature.id).update(
         **{
             f'inc__profession__{PROFESSION_NAME}': 1,
+            f'inc__internal__shard__{rarity}__used': cost_shard,
+            f'inc__internal__consumable__health__{kind}__created': count,
+            'inc__internal__currency__spent': cost_currency,
             'set__updated': utcnow(),
         }
     )

@@ -690,6 +690,109 @@ def test_mixology_gains_profession_and_highscore(world):
     assert stored['highscore']['profession']['tanning'] == 3
 
 
+#
+# Internal highscores (not shown to players), Lordslair 2026-10-30
+# (#engine-api msgs 1565777282864259093, 1565778121179791363)
+#
+@pytest.mark.parametrize('metaid, kind', [(2, 'fast'), (3, 'long')])
+@pytest.mark.parametrize('rarity', SHARDS)
+def test_mixology_counts_shard_used_consumable_created_and_currency_spent(
+        no_gain, monkeypatch, metaid, kind, rarity):
+    no_gain.setup(banana=30, **{'broken': 0, rarity: 2})
+    monkeypatch.setattr(no_gain.modules.route, 'mixology_yield', lambda score, rank: 4)
+
+    code, body = no_gain.craft(metaid, rarity)
+
+    assert code == 200
+    assert body['success'] is True
+    internal = no_gain.stored()['highscore']['internal']
+    # Only the burned rarity, by the recipe's shard amount
+    assert internal['shard'] == {rarity: {'used': 1}}
+    # The yield, not 1: one craft made 4 consumables
+    assert internal['consumable'] == {'health': {kind: {'created': 4}}}
+    # The recipe's currency amount, not 1
+    assert internal['currency'] == {'spent': 25}
+
+
+def test_mixology_internal_counters_follow_the_recipe_meta(no_gain, monkeypatch):
+    recipe = no_gain.modules.variables.metaIndexed['recipe'][1]
+    recipe['component']['wallet'] = {'currency': 7, 'shard': 3}
+    no_gain.setup(banana=20, broken=0, rare=6)
+    monkeypatch.setattr(no_gain.modules.route, 'mixology_yield', lambda score, rank: 2)
+
+    no_gain.craft(2, 'rare')
+    no_gain.craft(3, 'rare')
+
+    internal = no_gain.stored()['highscore']['internal']
+    assert internal['shard'] == {'rare': {'used': 6}}
+    assert internal['consumable'] == {'health': {'fast': {'created': 2}, 'long': {'created': 2}}}
+    assert internal['currency'] == {'spent': 14}
+
+
+def test_mixology_refusal_counts_nothing(world):
+    world.setup(banana=24, broken=1)
+
+    code, body = world.craft(2)
+
+    assert body['success'] is False
+    assert 'internal' not in world.stored()['highscore']
+
+
+def test_highscore_internal_reads_missing_counters_as_zeros(world):
+    # Highscore documents created before these counters (or after the flat
+    # internal.shard is unset by the migration) read them as zeros
+    world.setup(banana=25, broken=1)
+    highscores = world.modules.models['Highscore'].HighscoreDocument
+    highscores._get_collection().update_one(
+        {'_id': str(CREATURE_ID)}, {'$set': {'internal': {}}},
+        )
+
+    internal = highscores.objects(_id=CREATURE_ID).get().internal
+
+    for rarity in SHARDS:
+        shard = getattr(internal.shard, rarity)
+        assert (shard.bought, shard.obtained, shard.recycled, shard.sold, shard.used) == (0,) * 5
+    health = internal.consumable.health
+    assert (health.base.created, health.fast.created, health.long.created) == (0, 0, 0)
+    assert internal.currency.spent == 0
+
+
+def test_highscore_flat_internal_shard_needs_the_migration(world):
+    # The old flat internal.shard {bought, obtained, recycled, sold} does not
+    # load any more; unsetting it (the deploy migration) reads zeros again
+    world.setup(banana=25, broken=1)
+    highscores = world.modules.models['Highscore'].HighscoreDocument
+    collection = highscores._get_collection()
+    flat = {'bought': 0, 'obtained': 3, 'recycled': 0, 'sold': 0}
+    collection.update_one({'_id': str(CREATURE_ID)}, {'$set': {'internal': {'shard': flat}}})
+
+    with pytest.raises(mongoengine.errors.FieldDoesNotExist):
+        highscores.objects(_id=CREATURE_ID).get()
+
+    collection.update_many(
+        {'internal.shard.bought': {'$exists': True}}, {'$unset': {'internal.shard': ''}},
+        )
+    assert highscores.objects(_id=CREATURE_ID).get().internal.shard.broken.obtained == 0
+
+
+def test_highscore_internal_reads_the_counters_mixology_wrote(no_gain, monkeypatch):
+    no_gain.setup(banana=25, broken=0, epic=1)
+    monkeypatch.setattr(no_gain.modules.route, 'mixology_yield', lambda score, rank: 5)
+    highscores = no_gain.modules.models['Highscore'].HighscoreDocument
+    highscores._get_collection().update_one(
+        {'_id': str(CREATURE_ID)}, {'$set': {'internal': {}}},
+        )
+
+    no_gain.craft(3, 'epic')
+
+    internal = highscores.objects(_id=CREATURE_ID).get().internal
+    assert internal.shard.epic.used == 1
+    assert internal.shard.broken.used == 0
+    assert internal.consumable.health.long.created == 5
+    assert internal.consumable.health.fast.created == 0
+    assert internal.currency.spent == 25
+
+
 def test_mixology_on_documents_without_its_fields(world):
     # Profession, Highscore and Satchel documents that predate mixology lack
     # the field: they read as 0 and the first craft creates it

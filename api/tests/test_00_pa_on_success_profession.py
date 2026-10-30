@@ -91,6 +91,8 @@ def world(monkeypatch):
         # Recycling: the Item lock, the Creature as read again from the DB
         # (None: the same as g.Creature), and whether the Item is still there
         item_lock_free=True, locks=[], db_creature=None, item_gone=False,
+        # The Highscore update_one queries, in order
+        highscores=[],
         )
 
     def pa(red=0, blue=0, consume=False):
@@ -140,7 +142,8 @@ def world(monkeypatch):
         HighscoreDocument=types.SimpleNamespace(
             objects=lambda _id=None: types.SimpleNamespace(
                 update=lambda **kwargs: events.append(('highscore',)),
-                update_one=lambda **kwargs: events.append(('highscore',)),
+                update_one=lambda **kwargs: (
+                    events.append(('highscore',)), state.highscores.append(kwargs)),
                 ),
             ),
         )
@@ -496,6 +499,22 @@ def test_recycling_item_equipped_elsewhere_is_done(world):
 
     assert body['success'] is True
     assert ('item_delete',) in world.events
+
+
+@pytest.mark.parametrize('rarity', ['Broken', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'])
+def test_recycling_counts_the_shards_obtained_by_rarity(world, rarity):
+    # Internal highscore, Lordslair 2026-10-30 (#engine-api msgs
+    # 1565777282864259093, 1565778121179791363): internal.shard.<rarity>.obtained
+    item = _item(world, rarity)
+
+    code, body = world.call('recycling', item=item, itemuuid=item.id)
+
+    assert body['success'] is True
+    [query] = world.state.highscores
+    shard_counters = {key: value for key, value in query.items() if 'internal__shard' in key}
+    count = body['payload']['resource'][0]['count']
+    assert shard_counters == {f'inc__internal__shard__{rarity.lower()}__obtained': count}
+    assert query['inc__internal__item__recycled'] == 1
 
 
 def test_recycling_zero_shards_still_pays_once(world):
