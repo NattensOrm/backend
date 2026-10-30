@@ -10,6 +10,10 @@ from utils.decorators import (
     check_creature_exists,
     )
 
+# Highscore.internal holds the server-side counters (Lordslair 2026-10-30,
+# #engine-api msg 1565832626781290527): never sent to the player
+PRIVATE_FIELDS = ['internal']
+
 
 #
 # Routes /mypc/<uuid:creatureuuid>/highscores
@@ -20,9 +24,9 @@ from utils.decorators import (
 @check_creature_exists
 def highscores_get(creatureuuid):
     try:
-        if HighscoreDocument.objects(_id=creatureuuid):
-            Highscores = HighscoreDocument.objects(_id=creatureuuid).get()
-        else:
+        # The private fields are never loaded: a player read does not depend on their shape
+        Highscores = HighscoreDocument.objects(_id=creatureuuid).exclude(*PRIVATE_FIELDS).first()
+        if Highscores is None:
             msg = f'{g.h} HighscoreDocument Query KO - DoesNotExist'
             logger.warning(msg)
             return jsonify(
@@ -33,13 +37,13 @@ def highscores_get(creatureuuid):
                 }
             ), 200
     except Exception as e:
-        msg = f'{g.h} HighscoreDocument Query KO [{e}]'
-        logger.error(msg)
+        # The exception is logged only: its text never reaches the client
+        logger.error(f'{g.h} HighscoreDocument Query KO [{e}]')
         return jsonify(
             {
                 "success": False,
-                "msg": msg,
-                "payload": e,
+                "msg": f'{g.h} HighscoreDocument Query KO',
+                "payload": None,
             }
         ), 200
     else:
