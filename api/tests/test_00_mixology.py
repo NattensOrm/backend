@@ -42,6 +42,9 @@ MOCK_ALIAS = 'test-mixology'
 CREATURE_ID = uuid.uuid4()
 SINGOUIN_RACE = 2
 TICK = 3600
+# variables.rarity_array['item']: the shard rarities, rank = index
+RARITIES = ['Broken', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
+SHARDS = [rarity.lower() for rarity in RARITIES]
 
 
 def _load(name, path):
@@ -154,6 +157,7 @@ def modules(mongo, monkeypatch):
 
     variables = types.ModuleType('variables')
     variables.metaIndexed = {'recipe': _recipes()}
+    variables.rarity_array = {'item': RARITIES}
     monkeypatch.setitem(sys.modules, 'variables', variables)
 
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: lambda view: view)
@@ -175,14 +179,17 @@ def world(modules):
     professions = collection('Profession', 'ProfessionDocument')
     highscores = collection('Highscore', 'HighscoreDocument')
 
-    def setup(banana=0, broken=0, mixology=0, consumable=True):
-        """ The Creature documents; consumable=False stands for a pre-Q78 Satchel. """
+    def setup(banana=0, broken=0, mixology=0, consumable=True, **shards):
+        """
+        The Creature documents; consumable=False stands for a pre-Q78 Satchel.
+        The shards of the other rarities are given by name (rare=3).
+        """
         document = satchel_model.SatchelDocument(
             _id=CREATURE_ID,
             ammo=satchel_model.SatchelAmmo(),
             currency=satchel_model.SatchelCurrency(banana=banana, sausage=500),
             resource=satchel_model.SatchelResource(),
-            shard=satchel_model.SatchelShard(broken=broken),
+            shard=satchel_model.SatchelShard(broken=broken, **shards),
             )
         if consumable:
             document.consumable = satchel_model.SatchelConsumable(
@@ -201,11 +208,13 @@ def world(modules):
             'highscore': highscores.find_one({'_id': str(CREATURE_ID)}),
             }
 
-    def craft(metaid):
+    def craft(metaid, rarity='broken'):
         with app.test_request_context():
             g.h = f'[Creature.id:{CREATURE_ID}]'
             g.Creature = creature
-            response, code = modules.route.mixology(creatureuuid=CREATURE_ID, metaid=metaid)
+            response, code = modules.route.mixology(
+                creatureuuid=CREATURE_ID, metaid=metaid, rarity=rarity,
+                )
             return code, response.get_json()
 
     return types.SimpleNamespace(
@@ -318,7 +327,7 @@ def test_mixology_pays_the_recipe_and_fills_its_satchel_entry(no_gain, metaid, k
     assert satchel['consumable']['health'][other] == 0
     # Nothing produces the base heal yet
     assert satchel['consumable']['health']['base'] == 0
-    # Recipe 1 craft_potion: 25 banana (a singouin) + 1 broken shard
+    # Recipe 1 craft_potion: 25 banana (a singouin) + 1 shard of the chosen rarity (broken)
     assert satchel['currency']['banana'] == 5
     assert satchel['currency']['sausage'] == 500
     assert satchel['shard']['broken'] == 1
@@ -328,7 +337,7 @@ def test_mixology_pays_the_recipe_and_fills_its_satchel_entry(no_gain, metaid, k
 
 def test_mixology_reads_the_recipe_cost_from_the_metas(no_gain):
     recipe = no_gain.modules.variables.metaIndexed['recipe'][1]
-    recipe['component']['wallet'] = {'currency': 7, 'broken': 3}
+    recipe['component']['wallet'] = {'currency': 7, 'shard': 3}
     no_gain.setup(banana=10, broken=5)
 
     code, body = no_gain.craft(2)
@@ -417,6 +426,10 @@ def _histogram():
 def test_mixology_histogram_matches_the_formula(modules):
     rows = _histogram()
     assert len(rows) == 30
+    # Each rank and score once
+    assert {(rank, score) for rank, score, *_ in rows} == {
+        (rank, score) for rank in range(6) for score in (0, 25, 50, 75, 100)
+        }
     for rank, score, value, low, high, p_low, p_high in rows:
         assert modules.route.mixology_value(score, rank) == value
         assert low == value // 100
@@ -459,13 +472,65 @@ def test_mixology_draws_the_fraction(modules, monkeypatch, score, rank, draw, co
     assert modules.route.mixology_yield(score, rank) == count
 
 
-@pytest.mark.parametrize('score', [100, 101, 250])
-def test_mixology_score_over_100_counts_as_100(modules, score):
-    assert modules.route.mixology_value(score, 0) == 300
+@pytest.mark.parametrize('score, value', [(100, 300), (101, 300), (250, 300), (-5, 100)])
+def test_mixology_score_counts_between_0_and_100(modules, score, value):
+    assert modules.route.mixology_value(score, 0) == value
 
 
-def test_mixology_trinket_rank_is_0_until_its_place_is_known(modules):
-    assert modules.route.mixology_trinket_rank(types.SimpleNamespace()) == 0
+#
+# Trinket: the shard burned, its rarity chosen by the crafter
+#
+@pytest.mark.parametrize('rank, rarity', list(enumerate(SHARDS)))
+def test_mixology_trinket_rank_is_the_shard_rarity_index(modules, rank, rarity):
+    assert modules.route.mixology_trinket_rank(rarity) == rank
+
+
+@pytest.mark.parametrize('rank, rarity', list(enumerate(SHARDS)))
+def test_mixology_burns_the_chosen_shard_and_yields_by_its_rank(
+        no_gain, monkeypatch, rank, rarity,
+        ):
+    yields = []
+    route = no_gain.modules.route
+    monkeypatch.setattr(route, 'mixology_yield', lambda *args: yields.append(args) or 1)
+    no_gain.setup(banana=25, mixology=40, **{shard: 2 for shard in SHARDS})
+
+    code, body = no_gain.craft(2, rarity)
+
+    assert code == 200
+    assert body['success'] is True
+    assert yields == [(40, rank)]
+    shards = no_gain.stored()['satchel']['shard']
+    assert shards == {shard: 1 if shard == rarity else 2 for shard in SHARDS}
+
+
+@pytest.mark.parametrize('rarity', ['rare', 'legendary'])
+def test_mixology_without_a_shard_of_that_rarity_is_a_free_refusal(world, rarity):
+    # Plenty of the other rarities: the chosen one is what is checked
+    world.setup(banana=100, broken=5, common=5, uncommon=5, epic=5)
+    world.creature.instance = uuid.uuid4()
+    world.pools.update(red=10, blue=10)
+    before = world.stored()
+
+    code, body = world.craft(2, rarity)
+
+    assert code == 200
+    assert body['success'] is False
+    assert f'shard.{rarity}' in body['msg']
+    assert world.stored() == before
+    assert world.pools == {'red': 10, 'blue': 10}
+
+
+@pytest.mark.parametrize('rarity', ['Rare', 'mythic', 'shard', 'currency'])
+def test_mixology_of_an_unknown_rarity_is_400_and_writes_nothing(world, rarity):
+    world.setup(banana=100, broken=5, rare=5)
+    before = world.stored()
+
+    code, body = world.craft(2, rarity)
+
+    assert code == 400
+    assert body['success'] is False
+    assert body['payload'] is None
+    assert world.stored() == before
 
 
 @pytest.mark.parametrize('score, draw, count', [(0, 0, 1), (25, 49, 2), (25, 50, 1), (100, 0, 3)])
