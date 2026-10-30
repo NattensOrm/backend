@@ -694,7 +694,7 @@ def _load_api_variables(monkeypatch):
         )
     meta = types.ModuleType('mongo.models.Meta')
     for name in ('MetaArmor', 'MetaRace', 'MetaRecipe', 'MetaWeapon'):
-        setattr(meta, name, types.SimpleNamespace(objects=lambda: []))
+        setattr(meta, name, types.SimpleNamespace(objects=lambda: [stub]))
     monkeypatch.setitem(sys.modules, 'mongo.models.Meta', meta)
     monkeypatch.setenv('SEP_SECRET_KEY', 'unit-test-secret')
 
