@@ -145,7 +145,8 @@ def mixology(creatureuuid, metaid, rarity):
     # The shard burned, Satchel.shard.<rarity>: no default rarity
     trinket_rank = mixology_trinket_rank(rarity)
     if trinket_rank is None:
-        return refused(f'{g.h} Mixology KO (shard rarity:{rarity} unknown)', 400)
+        # Echoed escaped and cut: it is the raw path segment
+        return refused(f'{g.h} Mixology KO (shard rarity:{rarity[:16]!r} unknown)', 400)
 
     recipe = recipe_for(metaid)
     if recipe is None:
