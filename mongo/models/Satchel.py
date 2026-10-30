@@ -98,6 +98,37 @@ class SatchelAmmo(EmbeddedDocument):
     shell = IntField(required=True, default=0)
 
 
+class SatchelConsumableHealth(EmbeddedDocument):
+    """
+    Define the embedded document for: Satchel.consumable.health
+
+    Heals crafted by the mixology profession, by consumables meta (design
+    ruling Q78). fight-resolver reads and spends these paths
+    (consumable.health.fast / consumable.health.long): do not rename them.
+
+    Fields:
+    - base      (IntField) - nothing produces it yet (the standard heal,
+                             meta 1, is the plain banana currency)
+    - fast      (IntField) - consumables meta 2
+    - long      (IntField) - consumables meta 3
+    """
+    base = IntField(required=True, default=0)
+    fast = IntField(required=True, default=0)
+    long = IntField(required=True, default=0)
+
+
+class SatchelConsumable(EmbeddedDocument):
+    """
+    Define the embedded document for: Satchel.consumable
+
+    One embedded document per consumable type (only health for now).
+
+    Fields:
+    - health    (EmbeddedDocumentField)
+    """
+    health = EmbeddedDocumentField(SatchelConsumableHealth, required=True)
+
+
 class SatchelCurrency(EmbeddedDocument):
     """
     Define the embedded document for: Satchel.currency
@@ -117,6 +148,8 @@ class SatchelDocument(Document):
     Fields:
     - _id       (UUIDField)
     - ammo      (EmbeddedDocumentField)
+    - consumable (EmbeddedDocumentField) - optional: older satchels lack it,
+                                           readers treat it as all 0
     - currency  (EmbeddedDocumentField)
     - resource  (EmbeddedDocumentField)
     - shard     (EmbeddedDocumentField)
@@ -124,6 +157,7 @@ class SatchelDocument(Document):
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)
     ammo = EmbeddedDocumentField(SatchelAmmo, required=True)
+    consumable = EmbeddedDocumentField(SatchelConsumable)
     currency = EmbeddedDocumentField(SatchelCurrency, required=True)
     resource = EmbeddedDocumentField(SatchelResource, required=True)
     shard = EmbeddedDocumentField(SatchelShard, required=True)

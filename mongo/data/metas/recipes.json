@@ -3,9 +3,12 @@
         "component":{
             "wallet":{
                 "currency":25,
-                "broken":1
+                "shard":1
             },
             "inventory":null
+        },
+        "product":{
+            "consumable":[2, 3]
         },
         "id":1,
         "hs":"craft_potion",

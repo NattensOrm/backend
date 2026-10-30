@@ -27,7 +27,10 @@ from mongo.models.Highscore import (
     HighscoreDocument,
     HighscoreGeneral,
     HighscoreInternal,
+    HighscoreInternalConsumable,
+    HighscoreInternalCurrency,
     HighscoreInternalGenericResource,
+    HighscoreInternalShard,
     HighscoreProfession,
 )
 from mongo.models.Item import ItemDocument
@@ -35,6 +38,8 @@ from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import (
     SatchelDocument,
     SatchelAmmo,
+    SatchelConsumable,
+    SatchelConsumableHealth,
     SatchelCurrency,
     SatchelResource,
     SatchelShard,
@@ -226,6 +231,7 @@ def mypc_add():
             Satchel = SatchelDocument(
                 _id=uuid.uuid3(uuid.NAMESPACE_DNS, Creature.name),
                 ammo=SatchelAmmo(),
+                consumable=SatchelConsumable(health=SatchelConsumableHealth()),
                 currency=SatchelCurrency(),
                 resource=SatchelResource(),
                 shard=SatchelShard(),
@@ -273,12 +279,14 @@ def mypc_add():
                 _id=Creature.id,
                 general=HighscoreGeneral(),
                 internal=HighscoreInternal(
+                    consumable=HighscoreInternalConsumable(),
+                    currency=HighscoreInternalCurrency(),
                     fur=HighscoreInternalGenericResource(),
                     item=HighscoreInternalGenericResource(),
                     leather=HighscoreInternalGenericResource(),
                     meat=HighscoreInternalGenericResource(),
                     ore=HighscoreInternalGenericResource(),
-                    shard=HighscoreInternalGenericResource(),
+                    shard=HighscoreInternalShard(),
                     skin=HighscoreInternalGenericResource(),
                     ),
                 profession=HighscoreProfession(),

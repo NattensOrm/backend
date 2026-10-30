@@ -9,6 +9,16 @@
 │   ├── death (IntField)
 │   └── kill (IntField)
 ├── internal
+│   ├── consumable
+│   │   └── health
+│   │       ├── base
+│   │       │   └── created (IntField)
+│   │       ├── fast
+│   │       │   └── created (IntField)
+│   │       └── long
+│   │           └── created (IntField)
+│   ├── currency
+│   │   └── spent (IntField)
 │   ├── fur
 │   │   ├── bought (IntField)
 │   │   ├── obtained (IntField)
@@ -35,10 +45,42 @@
 │   │   ├── recycled (IntField)
 │   │   └── sold (IntField)
 │   ├── shard
-│   │   ├── bought (IntField)
-│   │   ├── obtained (IntField)
-│   │   ├── recycled (IntField)
-│   │   └── sold (IntField)
+│   │   ├── broken
+│   │   │   ├── bought (IntField)
+│   │   │   ├── obtained (IntField)
+│   │   │   ├── recycled (IntField)
+│   │   │   ├── sold (IntField)
+│   │   │   └── used (IntField)
+│   │   ├── common
+│   │   │   ├── bought (IntField)
+│   │   │   ├── obtained (IntField)
+│   │   │   ├── recycled (IntField)
+│   │   │   ├── sold (IntField)
+│   │   │   └── used (IntField)
+│   │   ├── uncommon
+│   │   │   ├── bought (IntField)
+│   │   │   ├── obtained (IntField)
+│   │   │   ├── recycled (IntField)
+│   │   │   ├── sold (IntField)
+│   │   │   └── used (IntField)
+│   │   ├── rare
+│   │   │   ├── bought (IntField)
+│   │   │   ├── obtained (IntField)
+│   │   │   ├── recycled (IntField)
+│   │   │   ├── sold (IntField)
+│   │   │   └── used (IntField)
+│   │   ├── epic
+│   │   │   ├── bought (IntField)
+│   │   │   ├── obtained (IntField)
+│   │   │   ├── recycled (IntField)
+│   │   │   ├── sold (IntField)
+│   │   │   └── used (IntField)
+│   │   └── legendary
+│   │       ├── bought (IntField)
+│   │       ├── obtained (IntField)
+│   │       ├── recycled (IntField)
+│   │       ├── sold (IntField)
+│   │       └── used (IntField)
 │   └── skin
 │       ├── bought (IntField)
 │       ├── obtained (IntField)
@@ -47,6 +89,7 @@
 ├── profession
 │   ├── gathering (IntField)
 │   ├── mining (IntField)
+│   ├── mixology (IntField)
 │   ├── recycling (IntField)
 │   ├── skinning (IntField)
 │   ├── tanning (IntField)
