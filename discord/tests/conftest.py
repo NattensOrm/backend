@@ -61,7 +61,10 @@ from mongo.models.Highscore import (  # noqa: E402
     HighscoreDocument,
     HighscoreGeneral,
     HighscoreInternal,
+    HighscoreInternalConsumable,
+    HighscoreInternalCurrency,
     HighscoreInternalGenericResource,
+    HighscoreInternalShard,
     HighscoreProfession,
     )
 from mongo.models.Aggro import AggroDocument  # noqa: E402
@@ -260,12 +263,14 @@ def make_highscore():
         data = dict(
             general=HighscoreGeneral(),
             internal=HighscoreInternal(
+                consumable=HighscoreInternalConsumable(),
+                currency=HighscoreInternalCurrency(),
                 fur=HighscoreInternalGenericResource(),
                 item=HighscoreInternalGenericResource(),
                 leather=HighscoreInternalGenericResource(),
                 meat=HighscoreInternalGenericResource(),
                 ore=HighscoreInternalGenericResource(),
-                shard=HighscoreInternalGenericResource(),
+                shard=HighscoreInternalShard(),
                 skin=HighscoreInternalGenericResource(),
                 ),
             profession=HighscoreProfession(),

@@ -27,7 +27,10 @@ from mongo.models.Highscore import (
     HighscoreDocument,
     HighscoreGeneral,
     HighscoreInternal,
+    HighscoreInternalConsumable,
+    HighscoreInternalCurrency,
     HighscoreInternalGenericResource,
+    HighscoreInternalShard,
     HighscoreProfession,
 )
 from mongo.models.Item import ItemDocument
@@ -276,12 +279,14 @@ def mypc_add():
                 _id=Creature.id,
                 general=HighscoreGeneral(),
                 internal=HighscoreInternal(
+                    consumable=HighscoreInternalConsumable(),
+                    currency=HighscoreInternalCurrency(),
                     fur=HighscoreInternalGenericResource(),
                     item=HighscoreInternalGenericResource(),
                     leather=HighscoreInternalGenericResource(),
                     meat=HighscoreInternalGenericResource(),
                     ore=HighscoreInternalGenericResource(),
-                    shard=HighscoreInternalGenericResource(),
+                    shard=HighscoreInternalShard(),
                     skin=HighscoreInternalGenericResource(),
                     ),
                 profession=HighscoreProfession(),

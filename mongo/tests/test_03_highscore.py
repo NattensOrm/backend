@@ -12,7 +12,10 @@ from mongo.models.Highscore import (  # noqa: E402
     HighscoreDocument,
     HighscoreGeneral,
     HighscoreInternal,
+    HighscoreInternalConsumable,
+    HighscoreInternalCurrency,
     HighscoreInternalGenericResource,
+    HighscoreInternalShard,
     HighscoreProfession,
 )
 from mongo.utils import utcnow  # noqa: E402
@@ -30,12 +33,14 @@ def test_mongodb_highscore_new():
         _id=CREATURE_ID,
         general=HighscoreGeneral(),
         internal=HighscoreInternal(
+            consumable=HighscoreInternalConsumable(),
+            currency=HighscoreInternalCurrency(),
             fur=HighscoreInternalGenericResource(),
             item=HighscoreInternalGenericResource(),
             leather=HighscoreInternalGenericResource(),
             meat=HighscoreInternalGenericResource(),
             ore=HighscoreInternalGenericResource(),
-            shard=HighscoreInternalGenericResource(),
+            shard=HighscoreInternalShard(),
             skin=HighscoreInternalGenericResource(),
             ),
         profession=HighscoreProfession(),
@@ -44,6 +49,24 @@ def test_mongodb_highscore_new():
 
     assert str(newHighscore.id) == CREATURE_ID
     assert newHighscore.general.kill == 0
+    # Internal counters start at zero: shards by rarity, consumables created,
+    # currency spent
+    internal = HighscoreDocument.objects(_id=CREATURE_ID).get().internal
+    assert internal.shard.broken.used == 0
+    assert internal.shard.legendary.obtained == 0
+    assert internal.consumable.health.fast.created == 0
+    assert internal.currency.spent == 0
+    stored = HighscoreDocument._get_collection().find_one({'_id': CREATURE_ID})
+    assert set(stored['internal']['shard']) == {
+        'broken', 'common', 'uncommon', 'rare', 'epic', 'legendary',
+        }
+    assert stored['internal']['shard']['rare'] == {
+        'bought': 0, 'obtained': 0, 'recycled': 0, 'sold': 0, 'used': 0,
+        }
+    assert stored['internal']['consumable'] == {
+        'health': {'base': {'created': 0}, 'fast': {'created': 0}, 'long': {'created': 0}},
+        }
+    assert stored['internal']['currency'] == {'spent': 0}
 
     #
     # Update
