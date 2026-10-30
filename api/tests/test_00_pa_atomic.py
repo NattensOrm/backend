@@ -68,7 +68,7 @@ def real_redis(monkeypatch):
     from variables import r as client
     try:
         client.ping()
-    except redis.exceptions.ConnectionError:
+    except redis.exceptions.RedisError:
         pytest.skip('no Redis server reachable')
     utils_redis = _env(monkeypatch)
     monkeypatch.setattr(utils_redis, 'r', client)
@@ -300,6 +300,20 @@ def test_consume_and_refund_on_real_redis(real_redis):
     assert _pa(utils_redis, creatureuuid) == {'red': 16, 'blue': 8}
 
 
+def test_partial_pools_consume_and_refund_on_real_redis(real_redis):
+    """ Existing keys: the spend and the refund move their TTL (EXPIRE), never SET or DEL. """
+    utils_redis, created = real_redis
+    creatureuuid = _creature()
+    created.append(creatureuuid)
+    _set_pa(utils_redis, creatureuuid, red=10, blue=5)
+
+    assert utils_redis.try_consume_pa(creatureuuid, redpa=2, bluepa=3, tick=TICK) is True
+    assert _pa(utils_redis, creatureuuid) == {'red': 8, 'blue': 2}
+
+    utils_redis.refund_pa(creatureuuid, redpa=1, bluepa=2, tick=TICK)
+    assert _pa(utils_redis, creatureuuid) == {'red': 9, 'blue': 4}
+
+
 #
 # Lua: the script duplicates utils.pa (Q104 split, TTL arithmetic), checked on a grid
 #
@@ -313,7 +327,10 @@ class _RecordingRedis:
     def call(self, command, key, *args):
         if command == 'TTL':
             return self.ttls[key]
-        self.writes.append((command, key) + tuple(int(arg) if not isinstance(arg, str) else arg
+        # Redis needs whole numbers: a fractional TTL would be refused there
+        for arg in args:
+            assert isinstance(arg, str) or float(arg).is_integer(), (command, key, args)
+        self.writes.append((command, key) + tuple(arg if isinstance(arg, str) else int(arg)
                                                   for arg in args))
 
 
@@ -364,10 +381,11 @@ def test_lua_matches_python_q104_and_ttl_arithmetic(pa_redis, tick):
                 for blue_cost in (0, 1, 3, 8, 9):
                     stub = _RecordingRedis(ttls)
                     lua_globals.redis = stub
-                    lua_globals.ARGV = lua.table(
+                    # Strings, as Redis passes ARGV
+                    lua_globals.ARGV = lua.table(*map(str, (
                         red_cost, blue_cost, durations['red'], durations['blue'],
                         RED_PA_MAX, BLUE_PA_MAX,
-                        )
+                        )))
                     result = int(script())
                     expected = _python_reference(ttls, red_cost, blue_cost, durations)
                     assert (result, stub.writes) == expected, (ttls, red_cost, blue_cost)
