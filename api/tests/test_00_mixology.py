@@ -5,6 +5,7 @@ import functools
 import importlib.util
 import json
 import os
+import re
 import sys
 import types
 import uuid
@@ -23,7 +24,7 @@ sys.path.append(LOCAL_PATH)
 # Lordslair 2026-10-29 (Discord #engine-ai): crafting the heals is the
 # mixology profession. In town without PA, in an Instance for 0 red / 4 blue
 # PA spent once the resources are. The recipe is read from the metas, one
-# consumable per craft (two at mastery), profession points and
+# yield of 1 to 5 by score and trinket (formula B), profession points and
 # highscore like the other professions. Meta 2 goes to
 # Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is
 # never crafted (design ruling Q78).
@@ -386,8 +387,90 @@ def test_mixology_by_a_race_without_currency_is_a_free_refusal(world):
 #
 # Yield
 #
-@pytest.mark.parametrize('score, count', [(0, 1), (99, 1), (100, 2)])
-def test_mixology_yields_one_and_two_at_mastery(no_gain, score, count):
+# Lordslair 2026-10-30 (msg 1565666550147457115): value = 1 + 2*score/100 +
+# 2*rank/5, the yield is floor(value) plus 1 with the fraction as chance.
+HISTOGRAM_ROW = re.compile(
+    r'#\s+(\d+)\s+\| \[[█.]{20}\] (\d)\.(\d) -> (\d)(?: or (\d) \((\d+)% / (\d+)%\))?$'
+    )
+HISTOGRAM_RANK = re.compile(r'# Trinket \w+ \(rank (\d)\)')
+
+
+def _histogram():
+    """ The route comment rows: (rank, score, value in hundredths, low, high, % low, % high). """
+    rows, rank = [], None
+    with open(ROUTE, encoding='utf8') as file:
+        for line in file:
+            line = line.strip()
+            if HISTOGRAM_RANK.match(line):
+                rank = int(HISTOGRAM_RANK.match(line).group(1))
+            elif HISTOGRAM_ROW.match(line):
+                score, units, tenths, low, high, p_low, p_high = HISTOGRAM_ROW.match(line).groups()
+                rows.append((
+                    rank, int(score), int(units) * 100 + int(tenths) * 10, int(low),
+                    None if high is None else int(high),
+                    None if p_low is None else int(p_low),
+                    None if p_high is None else int(p_high),
+                    ))
+    return rows
+
+
+def test_mixology_histogram_matches_the_formula(modules):
+    rows = _histogram()
+    assert len(rows) == 30
+    for rank, score, value, low, high, p_low, p_high in rows:
+        assert modules.route.mixology_value(score, rank) == value
+        assert low == value // 100
+        if high is None:
+            assert value % 100 == 0
+        else:
+            assert high == low + 1
+            assert (p_low, p_high) == (100 - value % 100, value % 100)
+
+
+@pytest.mark.parametrize('draw', [0, 99])
+def test_mixology_yield_stays_between_1_and_5(modules, monkeypatch, draw):
+    monkeypatch.setattr(modules.route, 'randrange', lambda stop: draw)
+    for rank in range(6):
+        for score in range(-10, 151):
+            assert 1 <= modules.route.mixology_yield(score, rank) <= 5
+    assert modules.route.mixology_yield(0, 0) == 1
+    assert modules.route.mixology_yield(100, 5) == 5
+
+
+@pytest.mark.parametrize('score, rank, count', [
+    (0, 0, 1), (50, 0, 2), (100, 0, 3), (50, 5, 4), (100, 5, 5),
+])
+def test_mixology_exact_values_never_draw_a_plus_one(modules, monkeypatch, score, rank, count):
+    # The lowest draw (0) would add 1 to any fraction: none here
+    monkeypatch.setattr(modules.route, 'randrange', lambda stop: 0)
+    assert modules.route.mixology_yield(score, rank) == count
+
+
+@pytest.mark.parametrize('score, rank, draw, count', [
+    # 1.5: +1 for draws 0..49
+    (25, 0, 49, 2), (25, 0, 50, 1),
+    # 1.4: +1 for draws 0..39
+    (0, 1, 39, 2), (0, 1, 40, 1),
+    # 4.6: +1 for draws 0..59
+    (100, 4, 59, 5), (100, 4, 60, 4),
+])
+def test_mixology_draws_the_fraction(modules, monkeypatch, score, rank, draw, count):
+    monkeypatch.setattr(modules.route, 'randrange', lambda stop: draw)
+    assert modules.route.mixology_yield(score, rank) == count
+
+
+@pytest.mark.parametrize('score', [100, 101, 250])
+def test_mixology_score_over_100_counts_as_100(modules, score):
+    assert modules.route.mixology_value(score, 0) == 300
+
+
+def test_mixology_trinket_rank_is_0_until_its_place_is_known(modules):
+    assert modules.route.mixology_trinket_rank(types.SimpleNamespace()) == 0
+
+
+@pytest.mark.parametrize('score, draw, count', [(0, 0, 1), (25, 49, 2), (25, 50, 1), (100, 0, 3)])
+def test_mixology_craft_yields_by_profession_score(no_gain, monkeypatch, score, draw, count):
+    monkeypatch.setattr(no_gain.modules.route, 'randrange', lambda stop: draw)
     no_gain.setup(banana=25, broken=1, mixology=score)
 
     code, body = no_gain.craft(3)
