@@ -61,7 +61,7 @@ def real_redis(monkeypatch):
     from variables import r as client
     try:
         client.ping()
-    except redis.exceptions.ConnectionError:
+    except redis.exceptions.RedisError:
         pytest.skip('no Redis server reachable')
     utils_redis = _env(monkeypatch)
     monkeypatch.setattr(utils_redis, 'r', client)
@@ -291,6 +291,20 @@ def test_consume_and_refund_on_real_redis(real_redis):
 
     utils_redis.refund_pa(creatureuuid, redpa=2, bluepa=8, tick=TICK)
     assert _pa(utils_redis, creatureuuid) == {'red': 16, 'blue': 8}
+
+
+def test_partial_pools_consume_and_refund_on_real_redis(real_redis):
+    """ Existing keys: the spend and the refund move their TTL (EXPIRE), never SET or DEL. """
+    utils_redis, created = real_redis
+    creatureuuid = _creature()
+    created.append(creatureuuid)
+    _set_pa(utils_redis, creatureuuid, red=10, blue=5)
+
+    assert utils_redis.try_consume_pa(creatureuuid, redpa=2, bluepa=3, tick=TICK) is True
+    assert _pa(utils_redis, creatureuuid) == {'red': 8, 'blue': 2}
+
+    utils_redis.refund_pa(creatureuuid, redpa=1, bluepa=2, tick=TICK)
+    assert _pa(utils_redis, creatureuuid) == {'red': 9, 'blue': 4}
 
 
 #

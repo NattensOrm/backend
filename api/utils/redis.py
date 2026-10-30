@@ -276,6 +276,8 @@ def try_consume_pa(
                     pipe.set(key, 'None', ex=new_ttl)
         return True
 
+    # Reruns until EXEC applies: no retry limit, a conflict needs another
+    # write on this Creature's pools in the few ms between WATCH and EXEC
     consumed = r.transaction(reserve, keys['blue'], keys['red'], value_from_callable=True)
     if not consumed:
         logger.trace(f'[Creature.id:{creatureuuid}] PA(red:{redpa}, blue:{bluepa}) unaffordable')
