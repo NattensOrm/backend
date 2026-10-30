@@ -1,6 +1,7 @@
-# Collection: event
+# Collection: events
 
 
+```text
 .
 ├── _id (UUIDField)
 ├── action (StringField)
@@ -12,4 +13,9 @@
 ├── name (StringField)
 ├── src (UUIDField)
 ├── trigger (UUIDField)
-└── type (StringField)
+└── type (IntField)
+```
+
+type:
+- < 10: Fight Actions (reserved for Resolver)
+- 10++: Generic Actions

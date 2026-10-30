@@ -17,16 +17,8 @@ from mongoengine.fields import (
     UUIDField,
 )
 
+from mongo.constants import CREATURE_RARITY
 from mongo.utils import utcnow
-
-CREATURE_RARITY = [
-    'Small',
-    'Medium',
-    'Big',
-    'Unique',
-    'Boss',
-    'God',
-    ]
 
 #
 # Collection: creature
@@ -76,15 +68,15 @@ class CreatureSlots(EmbeddedDocument):
     Define the embedded document for: Creature.slots
 
     Fields:
-    - feet      (UUIDField)
-    - hands     (UUIDField)
-    - head      (UUIDField)
-    - holster   (UUIDField)
-    - lefthand  (UUIDField)
-    - legs      (UUIDField)
-    - righthand (UUIDField)
-    - shoulders (UUIDField)
-    - torso     (UUIDField)
+    - feet      (EmbeddedDocumentField)
+    - hands     (EmbeddedDocumentField)
+    - head      (EmbeddedDocumentField)
+    - holster   (EmbeddedDocumentField)
+    - lefthand  (EmbeddedDocumentField)
+    - legs      (EmbeddedDocumentField)
+    - righthand (EmbeddedDocumentField)
+    - shoulders (EmbeddedDocumentField)
+    - torso     (EmbeddedDocumentField)
     """
     feet = EmbeddedDocumentField(CreatureSlot, default=None)
     hands = EmbeddedDocumentField(CreatureSlot, default=None)
@@ -99,7 +91,7 @@ class CreatureSlots(EmbeddedDocument):
 
 class CreatureStatsType(EmbeddedDocument):
     """
-    Define the embedded document for: Creature.stats
+    Define the embedded document for: Creature.stats.{race,spec,total}
 
     Fields:
     - b     (IntField)
@@ -132,6 +124,14 @@ class CreatureHP(EmbeddedDocument):
 
 
 class CreatureStats(EmbeddedDocument):
+    """
+    Define the embedded document for: Creature.stats
+
+    Fields:
+    - race  (EmbeddedDocumentField)
+    - spec  (EmbeddedDocumentField)
+    - total (EmbeddedDocumentField)
+    """
     race = EmbeddedDocumentField(CreatureStatsType, required=True)
     spec = EmbeddedDocumentField(CreatureStatsType, required=True)
     total = EmbeddedDocumentField(CreatureStatsType, required=True)
@@ -158,7 +158,7 @@ class CreatureDocument(Document):
     - slots         (EmbeddedDocumentField)
     - squad         (EmbeddedDocumentField)
     - stats         (EmbeddedDocumentField)
-    - targeted_by   (UUIDField)
+    - targeted_by   (StringField)
     - updated       (DateTimeField)
     - x             (IntField)
     - xp            (IntField)

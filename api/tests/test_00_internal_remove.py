@@ -19,6 +19,7 @@ LOCAL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(LOCAL_PATH)
 CORPSE_MODEL = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'models', 'Corpse.py')
 MONGO_UTILS = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'utils.py')
+MONGO_CONSTANTS = os.path.join(LOCAL_PATH, os.pardir, 'mongo', 'constants.py')
 MOCK_ALIAS = 'test-internal-remove'
 
 # Designer ruling Q99 (2026-10-10): a dead monster is removed from the map at
@@ -114,7 +115,7 @@ def corpse_model(monkeypatch):
     The real Corpse model, loaded straight from its file (the mongo package
     connects at import) on an in-memory mongomock, so its save() and queryset
     delete() run for real. Dropped after the test.
-    Its 'from mongo.utils import utcnow' gets mongo/utils.py under a stub
+    Its mongo.utils/constants imports get the real files under a stub
     mongo package, so mongo/__init__.py (and its connect()) never runs.
     The mock has its own alias: in CI the default one may already point at
     the real Mongo, registered by another test importing the mongo package.
@@ -126,6 +127,10 @@ def corpse_model(monkeypatch):
     utils = importlib.util.module_from_spec(utils_spec)
     utils_spec.loader.exec_module(utils)
     monkeypatch.setitem(sys.modules, 'mongo.utils', utils)
+    constants_spec = importlib.util.spec_from_file_location('mongo.constants', MONGO_CONSTANTS)
+    constants = importlib.util.module_from_spec(constants_spec)
+    constants_spec.loader.exec_module(constants)
+    monkeypatch.setitem(sys.modules, 'mongo.constants', constants)
     spec = importlib.util.spec_from_file_location('test_internal_remove_corpse', CORPSE_MODEL)
     model = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(model)
@@ -681,8 +686,12 @@ def test_instance_left_keeps_its_corpses(leave):
 def _load_api_variables(monkeypatch):
     """
     Executes the real api/variables.py under a private name. Its only Mongo
-    use is the metas, stubbed empty; nothing is left in sys.modules.
+    use is the metas, stubbed with one each (none would stop it at import);
+    nothing is left in sys.modules.
     """
+    stub = types.SimpleNamespace(
+        to_mongo=lambda: types.SimpleNamespace(to_dict=lambda: {'_id': 1}),
+        )
     meta = types.ModuleType('mongo.models.Meta')
     for name in ('MetaArmor', 'MetaRace', 'MetaRecipe', 'MetaWeapon'):
         setattr(meta, name, types.SimpleNamespace(objects=lambda: []))

@@ -1,6 +1,7 @@
-# Collection: creature
+# Collection: satchels
 
 
+```text
 .
 ├── _id (UUIDField)
 ├── ammo
@@ -35,3 +36,4 @@
 │   ├── epic (IntField)
 │   └── legendary (IntField)
 └── updated (DateTimeField)
+```

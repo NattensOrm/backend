@@ -46,6 +46,9 @@ def profession_gain(creatureuuid, profession, profession_score=None):
                     }
                 ProfessionDocument.objects(_id=creatureuuid).update(**profession_update_query)
 
+            # Only the score's own band rolls: the lower ones must not add to it
+            break
+
 
 def profession_scaled(profession_score):
     """Return a number (1 to 4) based on Profession score."""

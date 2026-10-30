@@ -1,6 +1,7 @@
-# Collection: squad
+# Collection: resources
 
 
+```text
 .
 ├── _id (UUIDField)
 ├── created (DateTimeField)
@@ -11,5 +12,5 @@
 ├── updated (DateTimeField)
 ├── visible (BooleanField)
 ├── x (IntField)
-├── y (IntField)
-└── updated (DateTimeField)
+└── y (IntField)
+```

@@ -1,6 +1,7 @@
-# Collection: highscore
+# Collection: highscores
 
 
+```text
 .
 ├── _id (UUIDField)
 ├── created (DateTimeField)
@@ -38,11 +39,11 @@
 │   │   ├── obtained (IntField)
 │   │   ├── recycled (IntField)
 │   │   └── sold (IntField)
-│   ├── skin
-│   │   ├── bought (IntField)
-│   │   ├── obtained (IntField)
-│   │   ├── recycled (IntField)
-│   │   └── sold (IntField)
+│   └── skin
+│       ├── bought (IntField)
+│       ├── obtained (IntField)
+│       ├── recycled (IntField)
+│       └── sold (IntField)
 ├── profession
 │   ├── gathering (IntField)
 │   ├── mining (IntField)
@@ -51,3 +52,4 @@
 │   ├── tanning (IntField)
 │   └── tracking (IntField)
 └── updated (DateTimeField)
+```

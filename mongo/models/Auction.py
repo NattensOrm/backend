@@ -18,16 +18,8 @@ from mongoengine.fields import (
     UUIDField,
 )
 
+from mongo.constants import RARITY
 from mongo.utils import utcnow
-
-ITEM_RARITY = [
-    'Broken',
-    'Common',
-    'Uncommon',
-    'Rare',
-    'Epic',
-    'Legendary',
-    ]
 
 #
 # Collection: auction
@@ -40,15 +32,16 @@ class AuctionItem(EmbeddedDocument):
 
     Fields:
     - id        (UUIDField)
-    - metaid    (UUIDField)
+    - metaid    (IntField)
     - metatype  (StringField)
+    - name      (StringField)
     - rarity    (StringField)
     """
     id = UUIDField(binary=False, default=None)
     metaid = IntField(required=True)
     metatype = StringField(required=True)
     name = StringField(required=True)
-    rarity = StringField(required=True, choices=ITEM_RARITY)
+    rarity = StringField(required=True, choices=RARITY)
 
 
 class AuctionSeller(EmbeddedDocument):
@@ -70,9 +63,9 @@ class AuctionDocument(Document):
     Fields:
     - _id       (UUIDField)
     - created   (DateTimeField)
-    - item      (UUIDField)
+    - item      (EmbeddedDocumentField)
     - price     (IntField)
-    - seller    (UUIDField)
+    - seller    (EmbeddedDocumentField)
     - updated   (DateTimeField)
     """
     _id = UUIDField(binary=False, primary_key=True, default=uuid.uuid4)

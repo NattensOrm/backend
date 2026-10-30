@@ -1,6 +1,7 @@
-# Collection: creature
+# Collection: corpses
 
 
+```text
 .
 ├── _id (UUIDField)
 ├── account (UUIDField)
@@ -14,3 +15,4 @@
 ├── rarity (StringField)
 ├── x (IntField)
 └── y (IntField)
+```
