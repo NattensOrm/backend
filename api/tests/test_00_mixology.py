@@ -33,6 +33,7 @@ sys.path.append(LOCAL_PATH)
 # a dict standing for the Redis pools, with the exists.pa / consume_pa rules.
 REPO_PATH = os.path.join(LOCAL_PATH, os.pardir)
 MONGO_UTILS = os.path.join(REPO_PATH, 'mongo', 'utils.py')
+MONGO_CONSTANTS = os.path.join(REPO_PATH, 'mongo', 'constants.py')
 MODELS = os.path.join(REPO_PATH, 'mongo', 'models')
 RECIPES = os.path.join(REPO_PATH, 'mongo', 'data', 'metas', 'recipes.json')
 TOOLS = os.path.join(LOCAL_PATH, 'routes', 'mypc', 'action', 'profession', '_tools.py')
@@ -42,7 +43,7 @@ MOCK_ALIAS = 'test-mixology'
 CREATURE_ID = uuid.uuid4()
 SINGOUIN_RACE = 2
 TICK = 3600
-# variables.rarity_array['item']: the shard rarities, rank = index
+# mongo.constants.RARITY: the shard rarities, rank = index
 RARITIES = ['Broken', 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
 SHARDS = [rarity.lower() for rarity in RARITIES]
 
@@ -118,6 +119,7 @@ def modules(mongo, monkeypatch):
     package.__path__ = []
     monkeypatch.setitem(sys.modules, 'mongo', package)
     monkeypatch.setitem(sys.modules, 'mongo.utils', _load('mongo.utils', MONGO_UTILS))
+    monkeypatch.setitem(sys.modules, 'mongo.constants', _load('mongo.constants', MONGO_CONSTANTS))
 
     models = {}
     for name, document in [
@@ -157,7 +159,6 @@ def modules(mongo, monkeypatch):
 
     variables = types.ModuleType('variables')
     variables.metaIndexed = {'recipe': _recipes()}
-    variables.rarity_array = {'item': RARITIES}
     monkeypatch.setitem(sys.modules, 'variables', variables)
 
     monkeypatch.setattr(flask_jwt_extended, 'jwt_required', lambda: lambda view: view)

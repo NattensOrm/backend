@@ -6,6 +6,7 @@ from flask_jwt_extended import jwt_required
 from loguru import logger
 from random import randrange
 
+from mongo.constants import RARITY
 from mongo.models.Highscore import HighscoreDocument
 from mongo.models.Profession import ProfessionDocument
 from mongo.models.Satchel import SatchelDocument
@@ -15,7 +16,7 @@ from routes._decorators import exists
 from routes.mypc.action.profession._tools import profession_gain
 from utils.pa import instance_tick
 from utils.redis import consume_pa, get_pa
-from variables import metaIndexed, rarity_array
+from variables import metaIndexed
 
 #
 # Profession.mixology specifics
@@ -57,11 +58,12 @@ def recipe_for(metaid):
 def mixology_shard_rank(rarity):
     """
     Return the rank of the shard the crafter burns, or None for an unknown
-    rarity: its rarity_array['item'] index (Broken 0 .. Legendary 5).
+    rarity: its mongo.constants.RARITY index (Broken 0 .. Legendary 5).
     Lordslair 2026-10-30 (msgs 1565667043003334668, 1565667218056945665): the
     rank is that of the shard the recipe burns, its rarity chosen by the crafter.
     """
-    rarities = [level.lower() for level in rarity_array['item']]
+    # The route takes the Satchel.shard field names: RARITY in lowercase
+    rarities = [level.lower() for level in RARITY]
     return rarities.index(rarity) if rarity in rarities else None
 
 
