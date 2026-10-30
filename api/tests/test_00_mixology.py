@@ -24,8 +24,8 @@ sys.path.append(LOCAL_PATH)
 # mixology profession. In town without PA, in an Instance for 0 red / 4 blue
 # PA spent once the resources are. The recipe is read from the metas, one
 # consumable per craft (two at mastery), profession points and
-# highscore like the other professions. Meta 2 goes to Satchel.consumable.fast,
-# meta 3 to .long; meta 1 (standard heal) is never crafted (design ruling Q78).
+# highscore like the other professions. Meta 2 goes to
+# Satchel.consumable.health.fast, meta 3 to .long; meta 1 (standard heal) is never crafted (design ruling Q78).
 # Unit test: Satchel/Profession/Highscore are real documents on an in-memory
 # mongomock, so the conditional update and the $inc run for real. The PA are
 # a dict standing for the Redis pools, with the exists.pa / consume_pa rules.
@@ -181,7 +181,9 @@ def world(modules):
             shard=satchel_model.SatchelShard(broken=broken),
             )
         if consumable:
-            document.consumable = satchel_model.SatchelConsumable()
+            document.consumable = satchel_model.SatchelConsumable(
+                health=satchel_model.SatchelConsumableHealth(),
+                )
         document.save()
         modules.models['Profession'].ProfessionDocument(_id=CREATURE_ID, mixology=mixology).save()
         # Only the part the route touches: Highscore embeds are all required
@@ -245,7 +247,7 @@ def test_mixology_in_an_instance_spends_4_blue_once(no_gain, red, blue, after):
 
     assert code == 200
     assert body['success'] is True
-    assert no_gain.stored()['satchel']['consumable']['fast'] == 1
+    assert no_gain.stored()['satchel']['consumable']['health']['fast'] == 1
     assert no_gain.pools == dict(after, spent=1)
     assert body['payload']['pa'] == dict(after, spent=1)
 
@@ -308,14 +310,16 @@ def test_mixology_pays_the_recipe_and_fills_its_satchel_entry(no_gain, metaid, k
     assert code == 200
     assert body['success'] is True
     satchel = no_gain.stored()['satchel']
-    assert satchel['consumable'][kind] == 1
-    assert satchel['consumable'][other] == 0
+    assert satchel['consumable']['health'][kind] == 1
+    assert satchel['consumable']['health'][other] == 0
+    # Nothing produces the base heal yet
+    assert satchel['consumable']['health']['base'] == 0
     # Recipe 1 craft_potion: 25 banana (a singouin) + 1 broken shard
     assert satchel['currency']['banana'] == 5
     assert satchel['currency']['sausage'] == 500
     assert satchel['shard']['broken'] == 1
     assert body['payload']['consumable'] == {'count': 1, 'metaid': metaid}
-    assert body['payload']['satchel']['consumable'][kind] == 1
+    assert body['payload']['satchel']['consumable']['health'][kind] == 1
 
 
 def test_mixology_reads_the_recipe_cost_from_the_metas(no_gain):
@@ -388,7 +392,7 @@ def test_mixology_yields_one_and_two_at_mastery(no_gain, score, count):
     assert code == 200
     assert body['payload']['consumable']['count'] == count
     stored = no_gain.stored()['satchel']
-    assert stored['consumable']['long'] == count
+    assert stored['consumable']['health']['long'] == count
     # One craft pays one recipe, whatever it yields
     assert stored['currency']['banana'] == 0
     assert stored['shard']['broken'] == 0
@@ -424,6 +428,6 @@ def test_mixology_on_documents_without_its_fields(world):
     assert code == 200
     assert body['payload']['consumable']['count'] == 1
     stored = world.stored()
-    assert stored['satchel']['consumable'] == {'long': 1}
+    assert stored['satchel']['consumable'] == {'health': {'long': 1}}
     assert stored['profession']['mixology'] == 1
     assert stored['highscore']['profession']['mixology'] == 1

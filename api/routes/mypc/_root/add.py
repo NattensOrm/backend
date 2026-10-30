@@ -36,6 +36,7 @@ from mongo.models.Satchel import (
     SatchelDocument,
     SatchelAmmo,
     SatchelConsumable,
+    SatchelConsumableHealth,
     SatchelCurrency,
     SatchelResource,
     SatchelShard,
@@ -227,7 +228,7 @@ def mypc_add():
             Satchel = SatchelDocument(
                 _id=uuid.uuid3(uuid.NAMESPACE_DNS, Creature.name),
                 ammo=SatchelAmmo(),
-                consumable=SatchelConsumable(),
+                consumable=SatchelConsumable(health=SatchelConsumableHealth()),
                 currency=SatchelCurrency(),
                 resource=SatchelResource(),
                 shard=SatchelShard(),

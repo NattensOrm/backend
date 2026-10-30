@@ -24,7 +24,7 @@ from variables import metaIndexed
 PA_COST_RED = 0
 PA_COST_BLUE = 4
 PROFESSION_NAME = 'mixology'
-# Satchel.consumable field of each crafted consumables meta. fight-resolver
+# Satchel.consumable.health field of each crafted consumables meta. fight-resolver
 # reads and spends these paths: do not rename them. Meta 1 (standard heal)
 # is plain currency, never crafted (design ruling Q78).
 CONSUMABLE_FIELDS = {
@@ -100,7 +100,7 @@ def mixology(creatureuuid, metaid):
 
     # One conditional update: the cost is checked and paid atomically, so two
     # concurrent crafts cannot both spend the same resources. A refusal writes
-    # nothing. $inc creates consumable.<kind> on satchels that predate it.
+    # nothing. $inc creates consumable.health.<kind> on satchels that predate it.
     updated = SatchelDocument.objects(
         _id=g.Creature.id,
         **{
@@ -111,7 +111,7 @@ def mixology(creatureuuid, metaid):
         **{
             f'inc__currency__{currency}': -cost_currency,
             'inc__shard__broken': -cost_broken,
-            f'inc__consumable__{kind}': count,
+            f'inc__consumable__health__{kind}': count,
             'set__updated': utcnow(),
         }
     )
