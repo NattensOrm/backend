@@ -15,7 +15,7 @@ from routes._decorators import exists
 from routes.mypc.action.profession._tools import profession_gain
 from utils.pa import instance_tick
 from utils.redis import consume_pa, get_pa
-from variables import metaIndexed
+from variables import metaIndexed, rarity_array
 
 #
 # Profession.mixology specifics
@@ -54,14 +54,15 @@ def recipe_for(metaid):
     return None
 
 
-def mixology_trinket_rank(creature):
+def mixology_trinket_rank(rarity):
     """
-    Return the rarity rank of the crafter's mixology trinket (rarity_array['item']
-    index: Broken 0 .. Legendary 5), 0 without one.
+    Return the rank of the shard the crafter burns, or None for an unknown
+    rarity: its rarity_array['item'] index (Broken 0 .. Legendary 5).
+    Lordslair 2026-10-30 (msgs 1565667043003334668, 1565667218056945665): the
+    trinket is the shard the recipe burns, its rarity chosen by the crafter.
     """
-    # TODO: where the trinket is worn or carried is not known yet (asked to
-    # Lordslair): no slot is guessed, every crafter counts as without one
-    return 0
+    rarities = [level.lower() for level in rarity_array['item']]
+    return rarities.index(rarity) if rarity in rarities else None
 
 
 def mixology_value(profession_score, trinket_rank):
@@ -129,17 +130,22 @@ def refused(msg, code, payload=None):
 #
 # Routes /mypc/<uuid:creatureuuid>/action
 #
-# API: POST /mypc/<uuid:creatureuuid>/action/profession/mixology/<int:metaid>
+# API: POST /mypc/<uuid:creatureuuid>/action/profession/mixology/<int:metaid>/<string:rarity>
 @jwt_required()
 # Custom decorators
 @exists.creature
 # Only checked here: the PA are consumed once the resources are spent (see below)
 @exists.pa(red=PA_COST_RED, blue=PA_COST_BLUE, consume=False)
-def mixology(creatureuuid, metaid):
+def mixology(creatureuuid, metaid, rarity):
     # Path parameter checks: before any write
     kind = CONSUMABLE_FIELDS.get(metaid)
     if kind is None:
         return refused(f'{g.h} Mixology KO (consumable:{metaid} is never crafted)', 400)
+
+    # The shard burned, Satchel.shard.<rarity>: no default rarity
+    trinket_rank = mixology_trinket_rank(rarity)
+    if trinket_rank is None:
+        return refused(f'{g.h} Mixology KO (shard rarity:{rarity} unknown)', 400)
 
     recipe = recipe_for(metaid)
     if recipe is None:
@@ -151,11 +157,12 @@ def mixology(creatureuuid, metaid):
 
     wallet = recipe['component']['wallet']
     cost_currency = wallet['currency']
-    cost_broken = wallet['broken']
+    # 'shard': that many shards of the rarity the crafter chose
+    cost_shard = wallet['shard']
 
     Profession = ProfessionDocument.objects(_id=g.Creature.id).get()
     profession_score = Profession.mixology
-    count = mixology_yield(profession_score, mixology_trinket_rank(g.Creature))
+    count = mixology_yield(profession_score, trinket_rank)
 
     # One conditional update: the cost is checked and paid atomically, so two
     # concurrent crafts cannot both spend the same resources. A refusal writes
@@ -164,12 +171,12 @@ def mixology(creatureuuid, metaid):
         _id=g.Creature.id,
         **{
             f'currency__{currency}__gte': cost_currency,
-            'shard__broken__gte': cost_broken,
+            f'shard__{rarity}__gte': cost_shard,
         },
     ).update_one(
         **{
             f'inc__currency__{currency}': -cost_currency,
-            'inc__shard__broken': -cost_broken,
+            f'inc__shard__{rarity}': -cost_shard,
             f'inc__consumable__health__{kind}': count,
             'set__updated': utcnow(),
         }
@@ -182,7 +189,7 @@ def mixology(creatureuuid, metaid):
     if updated == 0:
         return refused(
             f'{g.h} Not enough currency.{currency} ({cost_currency})'
-            f' or shard.broken ({cost_broken}) for {recipe["hs"]}.',
+            f' or shard.{rarity} ({cost_shard}) for {recipe["hs"]}.',
             200,
             {"satchel": Satchel.to_mongo()},
             )
