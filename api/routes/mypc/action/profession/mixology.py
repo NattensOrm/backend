@@ -156,7 +156,8 @@ def mixology(creatureuuid):
         return refused(
             f'{g.h} Mixology KO (body: validation and parsing error)',
             400,
-            e.errors(include_url=False, include_context=False),
+            # Without the client's input: NaN or Infinity would echo as invalid JSON
+            e.errors(include_url=False, include_context=False, include_input=False),
             )
 
     recipe = metaIndexed['recipe'].get(choice.recipe)

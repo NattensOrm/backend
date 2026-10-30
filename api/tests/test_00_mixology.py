@@ -320,6 +320,8 @@ VALID_BODY = {'recipe': 1, 'product': 2, 'shard': 'broken'}
     {**VALID_BODY, 'recipe': True},
     {**VALID_BODY, 'recipe': 1.0},
     {**VALID_BODY, 'recipe': None},
+    {**VALID_BODY, 'recipe': float('nan')},
+    {**VALID_BODY, 'product': float('inf')},
     {**VALID_BODY, 'product': '2'},
     {**VALID_BODY, 'product': [2]},
     {**VALID_BODY, 'shard': 0},
@@ -341,6 +343,8 @@ def test_mixology_of_an_invalid_body_is_400_and_writes_nothing(world, body):
     assert code == 400
     assert response['success'] is False
     assert isinstance(response['payload'], list)
+    # The errors never echo the client's input
+    assert all('input' not in error for error in response['payload'])
     assert world.stored() == before
     assert world.pools == {'red': 10, 'blue': 10}
 
